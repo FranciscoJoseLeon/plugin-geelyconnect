@@ -412,17 +412,15 @@ class geelyconnect extends eqLogic {
             'location' => array('name' => __('GPS Location', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 34),
             'odometer' => array('name' => __('Odometer', __FILE__), 'subType' => 'numeric', 'unite' => 'km', 'visible' => 1, 'order' => 35, 'min' => 0),
             'last_update' => array('name' => __('Last Sync', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 36),
-            // Sensor-based alerts and Jeedom Alarm / Sentry / Child & Pet Guard states
+            // Sensor-based alerts and Jeedom Alarm / Child & Pet Guard states
             'alarm_armed' => array('name' => __('Vehicle Alarm Armed', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 37),
             'alarm_triggered' => array('name' => __('Vehicle Alarm Triggered', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 38),
-            'sentry_mode' => array('name' => __('Sentry Mode Active', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 39),
-            'sentry_alert' => array('name' => __('Sentry Intrusion Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 40),
-            'child_pet_guard' => array('name' => __('Child & Pet Cabin Guard', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 41),
-            'cabin_overheat_alert' => array('name' => __('Cabin Overheat / Cold Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 42),
-            'tpms_alert' => array('name' => __('Low Tire Pressure Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 43),
-            'open_while_locked_alert' => array('name' => __('Open While Locked Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 44),
-            'low_12v_alert' => array('name' => __('Low 12V Battery Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 45),
-            'alert_message' => array('name' => __('Active Alerts Summary', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 46)
+            'child_pet_guard' => array('name' => __('Child & Pet Cabin Guard', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 39),
+            'cabin_overheat_alert' => array('name' => __('Cabin Overheat / Cold Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 40),
+            'tpms_alert' => array('name' => __('Low Tire Pressure Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 41),
+            'open_while_locked_alert' => array('name' => __('Open While Locked Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 42),
+            'low_12v_alert' => array('name' => __('Low 12V Battery Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 43),
+            'alert_message' => array('name' => __('Active Alerts Summary', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 44)
         );
 
         if (in_array($powertrain, array('PHEV', 'ICE', 'HYBRID'), true)) {
@@ -458,10 +456,8 @@ class geelyconnect extends eqLogic {
             // Local Jeedom Security & Guard commands
             'alarm_arm' => array('name' => __('Arm Vehicle Alarm', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 70),
             'alarm_disarm' => array('name' => __('Disarm Vehicle Alarm', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 71, 'confirm' => 1),
-            'sentry_on' => array('name' => __('Enable Sentry Mode', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 72),
-            'sentry_off' => array('name' => __('Disable Sentry Mode', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 73),
-            'child_pet_guard_on' => array('name' => __('Enable Child & Pet Guard', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 74),
-            'child_pet_guard_off' => array('name' => __('Disable Child & Pet Guard', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 75)
+            'child_pet_guard_on' => array('name' => __('Enable Child & Pet Guard', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 72),
+            'child_pet_guard_off' => array('name' => __('Disable Child & Pet Guard', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 73)
         );
 
         foreach ($actionCommands as $logicalId => $meta) {
@@ -568,16 +564,14 @@ class geelyconnect extends eqLogic {
             }
         }
 
-        // Jeedom Vehicle Alarm & Sentry Mode: detect unexpected opening or GPS movement while armed.
+        // Jeedom Vehicle Alarm: detect unexpected opening or GPS movement while armed.
         $alarmCmd = $this->getCmd('info', 'alarm_armed');
-        $sentryCmd = $this->getCmd('info', 'sentry_mode');
         $alarmArmed = is_object($alarmCmd) && ((int) $alarmCmd->execCmd()) === 1;
-        $sentryActive = is_object($sentryCmd) && ((int) $sentryCmd->execCmd()) === 1;
 
         $gpsMoved = false;
         $armedLoc = (string) $this->getConfiguration('armed_location', '');
         $currentLoc = (string) ($telemetry['location'] ?? '');
-        if (($alarmArmed || $sentryActive) && $armedLoc !== '' && $currentLoc !== '' && self::distanceMeters($armedLoc, $currentLoc) > 100.0) {
+        if ($alarmArmed && $armedLoc !== '' && $currentLoc !== '' && self::distanceMeters($armedLoc, $currentLoc) > 100.0) {
             $gpsMoved = true;
         }
 
@@ -586,10 +580,6 @@ class geelyconnect extends eqLogic {
             $this->checkAndUpdateCmd('alarm_triggered', 1);
             $alerts[] = __('ALARM TRIGGERED (intrusion or movement)', __FILE__);
             message::add('geelyconnect', sprintf(__('[%s] VEHICLE ALARM TRIGGERED! Check doors/GPS immediately.', __FILE__), $this->getName()));
-        }
-        if ($sentryActive && $intrusion) {
-            $this->checkAndUpdateCmd('sentry_alert', 1);
-            $alerts[] = __('Sentry Mode alert', __FILE__);
         }
 
         $this->checkAndUpdateCmd('alert_message', empty($alerts) ? 'OK' : implode(' | ', $alerts));
@@ -690,7 +680,6 @@ class geelyconnect extends eqLogic {
 
         $alarmArmed = ((int) $getVal('alarm_armed', 0)) === 1;
         $alarmTriggered = ((int) $getVal('alarm_triggered', 0)) === 1;
-        $sentryOn = ((int) $getVal('sentry_mode', 0)) === 1;
         $guardOn = ((int) $getVal('child_pet_guard', 0)) === 1;
         $alertSummary = (string) $getVal('alert_message', 'OK');
 
@@ -737,8 +726,6 @@ class geelyconnect extends eqLogic {
         $replace['#openings_summary#'] = empty($openList) ? __('All Closed', __FILE__) : htmlspecialchars(implode(', ', $openList), ENT_QUOTES, 'UTF-8');
         $replace['#alarm_next_action#'] = $alarmArmed ? 'alarm_disarm' : 'alarm_arm';
         $replace['#alarm_active_class#'] = $alarmTriggered ? 'is-alarm-triggered' : ($alarmArmed ? 'is-guard-on' : '');
-        $replace['#sentry_next_action#'] = $sentryOn ? 'sentry_off' : 'sentry_on';
-        $replace['#sentry_active_class#'] = $sentryOn ? 'is-guard-on' : '';
         $replace['#guard_next_action#'] = $guardOn ? 'child_pet_guard_off' : 'child_pet_guard_on';
         $replace['#guard_active_class#'] = $guardOn ? 'is-guard-on' : '';
         $replace['#alert_message#'] = htmlspecialchars($alertSummary, ENT_QUOTES, 'UTF-8');
@@ -786,19 +773,6 @@ class geelyconnectCmd extends cmd {
         if ($logicalId === 'alarm_disarm') {
             $eqLogic->checkAndUpdateCmd('alarm_armed', 0);
             $eqLogic->checkAndUpdateCmd('alarm_triggered', 0);
-            return;
-        }
-        if ($logicalId === 'sentry_on') {
-            $locCmd = $eqLogic->getCmd('info', 'location');
-            $eqLogic->setConfiguration('armed_location', is_object($locCmd) ? (string) $locCmd->execCmd() : '');
-            $eqLogic->save(true);
-            $eqLogic->checkAndUpdateCmd('sentry_mode', 1);
-            $eqLogic->checkAndUpdateCmd('sentry_alert', 0);
-            return;
-        }
-        if ($logicalId === 'sentry_off') {
-            $eqLogic->checkAndUpdateCmd('sentry_mode', 0);
-            $eqLogic->checkAndUpdateCmd('sentry_alert', 0);
             return;
         }
         if ($logicalId === 'child_pet_guard_on') {

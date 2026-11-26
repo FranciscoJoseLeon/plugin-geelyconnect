@@ -5,7 +5,7 @@
 - Added capability-driven vehicle identity (`model`, `year`, `trim`, `powertrain` EV/PHEV/ICE) displayed in desktop cards and widget header.
 - Expanded telemetry to 40+ info commands: TPMS (4 tires), 12V battery voltage, interior/exterior temperatures, individual door/trunk/hood/sunroof/window sensors, charging power (kW), plug status, time to full, service due, and PHEV fuel level/range.
 - Added advanced remote controls with asynchronous TCU polling: target temperature slider, Rapid Cooling/Warming, Defrost, G-Clean, driver seat heat/ventilation, Find Car, trunk unlock, sunroof, and scheduled charging.
-- Added sensor-based alerts (`tpms_alert`, `low_12v_alert`, `open_while_locked_alert`, `cabin_overheat_alert`), Jeedom Vehicle Alarm (`alarm_arm` / `alarm_disarm`), Sentry Mode (`sentry_on` / `sentry_off`), and Child & Pet Cabin Guard (`child_pet_guard_on` / `child_pet_guard_off`) with automatic climate protection.
+- Added sensor-based alerts (`tpms_alert`, `low_12v_alert`, `open_while_locked_alert`, `cabin_overheat_alert`), Jeedom Vehicle Alarm (`alarm_arm` / `alarm_disarm`), and Child & Pet Cabin Guard (`child_pet_guard_on` / `child_pet_guard_off`) with automatic climate protection.
 
 ## 1.0.0
 - Initial production release for Jeedom Core 4.4+.

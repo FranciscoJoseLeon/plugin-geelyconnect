@@ -84,5 +84,5 @@ Geely Connect is built with defense-in-depth principles:
 
 - **No Official Affiliation:** Geely Connect is an independent, community-developed plugin and is **not** affiliated with, endorsed by, or supported by Geely Auto or Zhejiang Geely Holding Group.
 - **AS-IS Warranty (AGPL):** This software is provided "as is" without warranty of any kind. The authors and contributors accept no liability for account lockouts, API disruptions, 12V battery discharge, or failed remote commands.
-- **Life-Safety Notice:** The **Vehicle Alarm**, **Sentry Mode**, and **Child & Pet Cabin Guard** features depend on third-party cloud APIs and cellular connectivity. **Never** leave children or pets unattended inside a vehicle relying on this plugin or any home automation alert.
+- **Life-Safety Notice:** The **Vehicle Alarm** and **Child & Pet Cabin Guard** features depend on third-party cloud APIs and cellular connectivity. **Never** leave children or pets unattended inside a vehicle relying on this plugin or any home automation alert.
 
