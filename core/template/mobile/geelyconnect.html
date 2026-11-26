@@ -1,0 +1,149 @@
+<div class="eqLogic eqLogic-widget geely-mobile-root"
+     data-eqLogic_id="#id#"
+     data-eqLogic_uid="#uid#"
+     data-version="#version#"
+     data-eqType="#eqType#"
+     data-tags="#tags#"
+     style="#style#">
+
+    <style>
+        .geely-mobile-root[data-eqLogic_id="#id#"] .geely-m-card {
+            padding: 12px;
+            border-radius: 14px;
+            background: linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(17, 24, 39, 0.9));
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            color: #e2e8f0;
+        }
+
+        .geely-mobile-root[data-eqLogic_id="#id#"] .geely-m-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .geely-mobile-root[data-eqLogic_id="#id#"] .geely-m-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: #f8fafc;
+        }
+
+        .geely-mobile-root[data-eqLogic_id="#id#"] .geely-m-map {
+            font-size: 11px;
+            color: #38bdf8;
+            text-decoration: none;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: rgba(56, 189, 248, 0.14);
+        }
+
+        .geely-mobile-root[data-eqLogic_id="#id#"] .geely-m-map[data-has-map="0"] {
+            display: none;
+        }
+
+        .geely-mobile-root[data-eqLogic_id="#id#"] .geely-m-bar-wrap {
+            background: rgba(148, 163, 184, 0.16);
+            border-radius: 999px;
+            height: 10px;
+            overflow: hidden;
+            margin: 6px 0 10px;
+        }
+
+        .geely-mobile-root[data-eqLogic_id="#id#"] .geely-m-bar-fill {
+            height: 100%;
+            width: #soc#%;
+            background: #soc_color#;
+            border-radius: 999px;
+            transition: width 0.4s ease;
+        }
+
+        .geely-mobile-root[data-eqLogic_id="#id#"] .geely-m-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .geely-mobile-root[data-eqLogic_id="#id#"] .geely-m-tile {
+            background: rgba(30, 41, 59, 0.7);
+            padding: 6px 8px;
+            border-radius: 8px;
+        }
+
+        .geely-mobile-root[data-eqLogic_id="#id#"] .geely-m-actions {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+        }
+
+        .geely-mobile-root[data-eqLogic_id="#id#"] .geely-m-btn {
+            padding: 8px 4px;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            background: rgba(30, 41, 59, 0.85);
+            color: #f1f5f9;
+            font-size: 11px;
+            text-align: center;
+        }
+    </style>
+
+    <div class="geely-m-card">
+        <div class="geely-m-head">
+            <span class="geely-m-title">#name_display# (#soc#%)</span>
+            <a href="#map_url#" target="_blank" rel="noopener noreferrer" class="geely-m-map" data-has-map="#has_map#">
+                <i class="fas fa-map-marker-alt"></i> {{Map}}
+            </a>
+        </div>
+
+        <div class="geely-m-bar-wrap">
+            <div class="geely-m-bar-fill"></div>
+        </div>
+
+        <div class="geely-m-grid">
+            <div class="geely-m-tile"><strong>{{Range}}:</strong> #range# km</div>
+            <div class="geely-m-tile"><strong>{{Odometer}}:</strong> #odometer# km</div>
+            <div class="geely-m-tile"><strong>{{Doors}}:</strong> #lock_label#</div>
+            <div class="geely-m-tile"><strong>{{Climate}}:</strong> #climate_label#</div>
+        </div>
+
+        <div class="geely-m-actions">
+            <button type="button" class="geely-m-btn" data-geely-action="lock"><i class="fas fa-lock"></i></button>
+            <button type="button" class="geely-m-btn" data-geely-action="unlock" data-has-pin="#has_unlock_pin#"><i class="fas fa-unlock-alt"></i></button>
+            <button type="button" class="geely-m-btn" data-geely-action="#climate_next_action#"><i class="fas fa-fan"></i></button>
+            <button type="button" class="geely-m-btn" data-geely-action="refresh"><i class="fas fa-sync-alt"></i></button>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var root = document.querySelector('.geely-mobile-root[data-eqLogic_id="#id#"]');
+            if (!root) return;
+            root.querySelectorAll('.geely-m-btn[data-geely-action]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var actionName = btn.getAttribute('data-geely-action');
+                    var pin = '';
+                    if (actionName === 'unlock') {
+                        if (btn.getAttribute('data-has-pin') === '1') {
+                            pin = window.prompt('{{Enter your security PIN:}}');
+                            if (pin === null || pin.trim() === '') return;
+                        } else if (!window.confirm('{{Confirm door unlock?}}')) {
+                            return;
+                        }
+                    }
+                    $.ajax({
+                        type: 'POST',
+                        url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
+                        data: {
+                            action: 'executeWidgetAction',
+                            eqLogic_id: '#id#',
+                            command: actionName,
+                            pin: pin.trim()
+                        },
+                        dataType: 'json'
+                    });
+                });
+            });
+        })();
+    </script>
+</div>

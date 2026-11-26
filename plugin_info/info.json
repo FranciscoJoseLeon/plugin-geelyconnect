@@ -1,0 +1,15 @@
+{
+  "id": "geelyconnect",
+  "name": "Geely Connect",
+  "description": "Connect and control your Geely connected vehicle (EV/PHEV/ICE) in Jeedom: real-time battery SoC, range, lock state, climate control, GPS location, and secure remote commands.",
+  "licence": "AGPL",
+  "author": "Geely Connect Contributors",
+  "require": "4.4",
+  "version": "1.0.0",
+  "category": "automatisation",
+  "hasDependency": true,
+  "hasOwnDeamon": true,
+  "maxDependancyInstallTime": 10,
+  "documentation": "https://jeedom.github.io/plugin-geelyconnect/en_US/",
+  "changelog": "https://jeedom.github.io/plugin-geelyconnect/en_US/changelog"
+}

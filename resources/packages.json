@@ -1,0 +1,14 @@
+{
+  "apt": {
+    "python3-venv": {},
+    "python3-pip": {}
+  },
+  "pip3": {
+    "requests": {
+      "version": ">=2.31.0"
+    },
+    "pycryptodome": {
+      "version": ">=3.19.0"
+    }
+  }
+}

@@ -1,0 +1,436 @@
+<div class="eqLogic eqLogic-widget allowResize allowReorderCmd geely-widget-root"
+     data-eqLogic_id="#id#"
+     data-eqLogic_uid="#uid#"
+     data-version="#version#"
+     data-eqType="#eqType#"
+     data-translate-category="#translate_category#"
+     data-category="#category#"
+     data-tags="#tags#"
+     style="width: #width#;height: #height#;min-width:320px;min-height:360px;#style#">
+
+    <style>
+        .geely-widget-root[data-eqLogic_id="#id#"] {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            border-radius: 16px !important;
+            overflow: hidden;
+            background: transparent !important;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-card {
+            position: relative;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 14px 16px;
+            background: linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(17, 24, 39, 0.88));
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(56, 189, 248, 0.22);
+            border-radius: 16px;
+            color: #e2e8f0;
+            box-sizing: border-box;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+            padding-bottom: 10px;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-title-wrap {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-title {
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            color: #f8fafc;
+            text-decoration: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-vin {
+            font-size: 11px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            color: #94a3b8;
+            letter-spacing: 0.6px;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-map-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-map-badge:hover {
+            background: rgba(56, 189, 248, 0.24);
+            color: #7dd3fc;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-map-badge[data-has-map="0"] {
+            opacity: 0.45;
+            pointer-events: none;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-hero {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 12px 0;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-gauge-wrap {
+            position: relative;
+            width: 104px;
+            height: 104px;
+            flex-shrink: 0;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-gauge-svg {
+            width: 104px;
+            height: 104px;
+            transform: rotate(-90deg);
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-gauge-bg {
+            fill: none;
+            stroke: rgba(148, 163, 184, 0.16);
+            stroke-width: 8;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-gauge-fg {
+            fill: none;
+            stroke: #soc_color#;
+            stroke-width: 8;
+            stroke-linecap: round;
+            stroke-dasharray: 276.46;
+            stroke-dashoffset: #soc_dashoffset#;
+            transition: stroke-dashoffset 0.6s ease, stroke 0.3s ease;
+            filter: drop-shadow(0 0 6px #soc_color#);
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-gauge-center {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-soc-value {
+            font-size: 22px;
+            font-weight: 800;
+            color: #f8fafc;
+            line-height: 1.1;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-soc-unit {
+            font-size: 11px;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-charging-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 4px;
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 600;
+            background: rgba(148, 163, 184, 0.14);
+            color: #cbd5e1;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-charging-pill.is-charging {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            animation: geelyPulse_#id# 1.8s infinite;
+        }
+
+        @keyframes geelyPulse_#id# {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); }
+            50% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+        }
+
+        @keyframes geelySpin_#id# {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-telemetry-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            flex: 1;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-stat-tile {
+            background: rgba(30, 41, 59, 0.65);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            border-radius: 10px;
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-stat-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-stat-val {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-stat-tile.is-locked .geely-stat-val {
+            color: #34d399;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-stat-tile.is-unlocked .geely-stat-val {
+            color: #fbbf24;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-stat-tile.is-active .geely-stat-val {
+            color: #38bdf8;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-stat-tile.is-active .geely-fan-icon {
+            animation: geelySpin_#id# 2s linear infinite;
+            color: #38bdf8;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-dock {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 8px 4px;
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: rgba(30, 41, 59, 0.8);
+            color: #e2e8f0;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.12s ease, background 0.2s ease, border-color 0.2s ease;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-btn:hover {
+            background: rgba(56, 189, 248, 0.16);
+            border-color: rgba(56, 189, 248, 0.45);
+            transform: translateY(-1px);
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-btn:active {
+            transform: scale(0.96);
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-btn.is-busy {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-btn-unlock {
+            border-color: rgba(245, 158, 11, 0.35);
+            color: #fcd34d;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 10px;
+            color: #64748b;
+        }
+
+        .geely-widget-root[data-eqLogic_id="#id#"] .geely-feedback {
+            color: #38bdf8;
+            font-weight: 600;
+        }
+    </style>
+
+    <div class="geely-card">
+        <div class="geely-header">
+            <div class="geely-title-wrap">
+                <a href="#eqLink#" class="geely-title" title="#name_display#">#name_display#</a>
+                <span class="geely-vin">#vin#</span>
+            </div>
+            <a href="#map_url#" target="_blank" rel="noopener noreferrer" class="geely-map-badge" data-has-map="#has_map#" title="{{Open vehicle location on map}}">
+                <i class="fas fa-map-marker-alt"></i>
+                <span>{{Locate}}</span>
+            </a>
+        </div>
+
+        <div class="geely-hero">
+            <div class="geely-gauge-wrap">
+                <svg class="geely-gauge-svg" viewBox="0 0 104 104">
+                    <circle class="geely-gauge-bg" cx="52" cy="52" r="44"></circle>
+                    <circle class="geely-gauge-fg" cx="52" cy="52" r="44"></circle>
+                </svg>
+                <div class="geely-gauge-center">
+                    <span class="geely-soc-value">#soc#<span class="geely-soc-unit">%</span></span>
+                    <span class="geely-charging-pill #charging_active#">
+                        <i class="fas fa-bolt"></i> #charging_status#
+                    </span>
+                </div>
+            </div>
+
+            <div class="geely-telemetry-grid">
+                <div class="geely-stat-tile">
+                    <span class="geely-stat-label"><i class="fas fa-road"></i> {{Range}}</span>
+                    <span class="geely-stat-val">#range# km</span>
+                </div>
+                <div class="geely-stat-tile">
+                    <span class="geely-stat-label"><i class="fas fa-tachometer-alt"></i> {{Odometer}}</span>
+                    <span class="geely-stat-val">#odometer# km</span>
+                </div>
+                <div class="geely-stat-tile #lock_state_class#">
+                    <span class="geely-stat-label"><i class="fas fa-shield-alt"></i> {{Security}}</span>
+                    <span class="geely-stat-val">#lock_label#</span>
+                </div>
+                <div class="geely-stat-tile #climate_state_class#">
+                    <span class="geely-stat-label"><i class="fas fa-fan geely-fan-icon"></i> {{Climate}}</span>
+                    <span class="geely-stat-val">#climate_label#</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="geely-dock">
+            <button type="button" class="geely-btn" data-geely-action="lock" data-cmd-id="#cmd_lock_id#">
+                <i class="fas fa-lock"></i>
+                <span>{{Lock}}</span>
+            </button>
+            <button type="button" class="geely-btn geely-btn-unlock" data-geely-action="unlock" data-cmd-id="#cmd_unlock_id#" data-has-pin="#has_unlock_pin#">
+                <i class="fas fa-unlock-alt"></i>
+                <span>{{Unlock}}</span>
+            </button>
+            <button type="button" class="geely-btn" data-geely-action="#climate_next_action#" data-cmd-id="#cmd_climate_on_id#">
+                <i class="fas fa-snowflake"></i>
+                <span>{{Climate}}</span>
+            </button>
+            <button type="button" class="geely-btn" data-geely-action="refresh" data-cmd-id="#cmd_refresh_id#">
+                <i class="fas fa-sync-alt"></i>
+                <span>{{Refresh}}</span>
+            </button>
+        </div>
+
+        <div class="geely-footer">
+            <span><i class="far fa-clock"></i> {{Sync}}: #last_update#</span>
+            <span class="geely-feedback" id="geely_feedback_#id#"></span>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var root = document.querySelector('.geely-widget-root[data-eqLogic_id="#id#"]');
+            if (!root) return;
+            var feedbackEl = document.getElementById('geely_feedback_#id#');
+
+            function setFeedback(text) {
+                if (feedbackEl) {
+                    feedbackEl.textContent = text;
+                    setTimeout(function () {
+                        if (feedbackEl.textContent === text) {
+                            feedbackEl.textContent = '';
+                        }
+                    }, 3500);
+                }
+            }
+
+            function triggerAction(btn, actionName, pin) {
+                btn.classList.add('is-busy');
+                setFeedback('{{Sending...}}');
+
+                $.ajax({
+                    type: 'POST',
+                    url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
+                    data: {
+                        action: 'executeWidgetAction',
+                        eqLogic_id: '#id#',
+                        command: actionName,
+                        pin: pin || ''
+                    },
+                    dataType: 'json',
+                    complete: function () {
+                        btn.classList.remove('is-busy');
+                    },
+                    error: function () {
+                        setFeedback('{{Command failed}}');
+                    },
+                    success: function (res) {
+                        if (res && res.state === 'ok') {
+                            setFeedback('{{Sent}}');
+                        } else {
+                            setFeedback((res && res.result) ? res.result : '{{Error}}');
+                        }
+                    }
+                });
+            }
+
+            var buttons = root.querySelectorAll('.geely-btn[data-geely-action]');
+            buttons.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var actionName = btn.getAttribute('data-geely-action');
+                    if (actionName === 'unlock') {
+                        var hasPin = btn.getAttribute('data-has-pin') === '1';
+                        if (hasPin) {
+                            var enteredPin = window.prompt('{{Enter your security PIN to unlock the vehicle doors:}}');
+                            if (enteredPin === null || enteredPin.trim() === '') {
+                                return;
+                            }
+                            triggerAction(btn, actionName, enteredPin.trim());
+                            return;
+                        }
+                        if (!window.confirm('{{Are you sure you want to unlock the vehicle doors?}}')) {
+                            return;
+                        }
+                    }
+                    triggerAction(btn, actionName, '');
+                });
+            });
+        })();
+    </script>
+</div>
