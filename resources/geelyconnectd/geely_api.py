@@ -19,9 +19,9 @@ class GeelyApiClient:
     """Modular client for Geely Connect / Global regional vehicle telemetry and remote control APIs."""
 
     REGION_ENDPOINTS = {
-        'EU': 'https://eu-connect-api.geely.com',
-        'GLOBAL': 'https://global-connect-api.geely.com',
-        'APAC': 'https://apac-connect-api.geely.com',
+        'EU': 'https://apis.ecloudeu.com',
+        'GLOBAL': 'https://apis.ecloudeu.com',
+        'APAC': 'https://apis.xcloudsvc.com',
     }
 
     MAX_BACKOFF_SECONDS = 1800
@@ -385,7 +385,7 @@ class GeelyApiClient:
     def get_vehicle_capabilities(self, vin):
         """Query per-VIN capability catalog to determine powertrain and supported trim features."""
         try:
-            data = self._request('GET', f'/v1/vehicles/{vin}/capabilities')
+            data = self._request('GET', f'/geelyTCAccess/tcservices/capability/{vin}?pageSize=2000&pageIndex=1&vehicleType=0')
             return {
                 'powertrain': str(data.get('powertrain', 'EV')).upper(),
                 'features': data.get('features', {}),
@@ -473,8 +473,8 @@ class GeelyApiClient:
             'unlock_trunk': ('PUT', '/remote-control/vehicle/telematics/{vin}', {'command': 'unlock_trunk'}),
             'sunroof_open': ('PUT', '/remote-control/vehicle/telematics/{vin}', {'command': 'sunroof', 'open': True}),
             'sunroof_close': ('PUT', '/remote-control/vehicle/telematics/{vin}', {'command': 'sunroof', 'open': False}),
-            'scheduled_charge_on': ('PUT', '/remote-control/vehicle/charging/{vin}', {'scheduled': True}),
-            'scheduled_charge_off': ('PUT', '/remote-control/vehicle/charging/{vin}', {'scheduled': False}),
+            'scheduled_charge_on': ('POST', '/charge-server/ecarx_charge_set/{vin}', {'bizType': 6, 'scheduled': True}),
+            'scheduled_charge_off': ('POST', '/charge-server/ecarx_charge_set/{vin}', {'bizType': 6, 'scheduled': False}),
             'refresh': ('POST', '/v1/vehicles/{vin}/commands/refresh', {}),
         }
         if command not in command_map:
