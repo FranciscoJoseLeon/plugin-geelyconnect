@@ -15,14 +15,18 @@ class RedactingFormatter(logging.Formatter):
     """Logging formatter that masks passwords, API keys, bearer tokens, and VINs even in DEBUG mode."""
 
     _SENSITIVE_KV_RE = re.compile(
-        r'((?:password|passwd|apikey|api_key|token|access_token|refresh_token|authorization|secret|pin)'
+        r'((?:password|passwd|apikey|api_key|token|access_token|refresh_token|accessToken|refreshToken|authorization|secret|pin|code|csr|client_key|captcha_output|pass_token)'
         r'["\']?\s*[:=]\s*["\']?)([^"\'\s,}]+)',
         re.IGNORECASE,
     )
     _VIN_RE = re.compile(r'\b([A-HJ-NPR-Z0-9]{4})[A-HJ-NPR-Z0-9]{9}([A-HJ-NPR-Z0-9]{4})\b')
+    _BEARER_RE = re.compile(r'(Bearer\s+)[A-Za-z0-9._~+/=-]+', re.IGNORECASE)
+    _PEM_KEY_RE = re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----', re.DOTALL)
 
     def format(self, record):
         rendered = super().format(record)
+        rendered = self._PEM_KEY_RE.sub('***REDACTED PRIVATE KEY***', rendered)
+        rendered = self._BEARER_RE.sub(r'\1***REDACTED***', rendered)
         rendered = self._SENSITIVE_KV_RE.sub(r'\1***REDACTED***', rendered)
         rendered = self._VIN_RE.sub(r'\1********* \2'.replace(' ', ''), rendered)
         return rendered

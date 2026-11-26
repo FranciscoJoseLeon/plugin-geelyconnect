@@ -34,6 +34,21 @@ if (!is_array($payload)) {
     die();
 }
 
+// Session lifecycle events emitted by the daemon (single-session invalidation, re-login success).
+if (isset($payload['event'])) {
+    $event = (string) $payload['event'];
+    if ($event === 'session_invalidated') {
+        config::save('session_state', 'invalid', 'geelyconnect');
+        $reason = substr(preg_replace('/[^A-Za-z0-9 .,:()\/_-]/', '', (string) ($payload['message'] ?? '')), 0, 300);
+        message::add('geelyconnect', __('Geely session invalidated (expired or opened on another device). Open the plugin configuration and complete the email OTP login again.', __FILE__) . ($reason !== '' ? ' [' . $reason . ']' : ''), '', 'geelyconnect_session');
+        log::add('geelyconnect', 'warning', 'Session invalidated: ' . $reason);
+    } elseif ($event === 'session_ok') {
+        config::save('session_state', 'active', 'geelyconnect');
+    }
+    echo json_encode(array('status' => 'ok'));
+    die();
+}
+
 $vehicles = isset($payload['vehicles']) && is_array($payload['vehicles']) ? $payload['vehicles'] : array($payload);
 
 foreach ($vehicles as $vehicleData) {

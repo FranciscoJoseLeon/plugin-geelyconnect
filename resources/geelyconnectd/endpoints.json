@@ -1,0 +1,74 @@
+{
+  "_comment": "Default Geely Global endpoint map. Entries flagged in _unverified were not confirmed from public sources and MUST be checked against traffic captured from your own Geely app session. Override any key via the plugin configuration page (stored in data/endpoints.json).",
+  "_unverified": [
+    "auth.captcha_init",
+    "auth.send_code",
+    "auth.verify_code",
+    "auth.refresh",
+    "auth.password_login",
+    "auth.provision_cert",
+    "account.profile",
+    "vehicle.list",
+    "vehicle.status",
+    "vehicle.command_status",
+    "commands.*.body.serviceId"
+  ],
+  "base_urls": {
+    "EU": "https://apis.ecloudeu.com",
+    "GLOBAL": "https://apis.ecloudeu.com",
+    "APAC": "https://apis.xcloudsvc.com"
+  },
+  "static_headers": {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "User-Agent": "GeelyConnect-Jeedom/1.2.0"
+  },
+  "country_header": "X-Country-Code",
+  "device_header": "X-Device-Id",
+  "response_unwrap_key": "data",
+  "session_invalid_codes": ["401", "40101", "TOKEN_EXPIRED", "SESSION_KICKED", "LOGIN_ELSEWHERE"],
+  "csr_key_type": "rsa:2048",
+  "auth": {
+    "captcha_init": "/auth/captcha/init",
+    "send_code": "/auth/account/code/send",
+    "verify_code": "/auth/account/code/verify",
+    "refresh": "/auth/account/session/refresh",
+    "password_login": "",
+    "provision_cert": "/auth/device/certificate"
+  },
+  "account": {
+    "profile": "/auth/account/profile"
+  },
+  "vehicle": {
+    "list": "/geelyTCAccess/tcservices/vehicle/list",
+    "status": "/geelyTCAccess/tcservices/vehicle/status/{vin}",
+    "capability": "/geelyTCAccess/tcservices/capability/{vin}?pageSize=2000&pageIndex=1&vehicleType=0",
+    "command_status": ""
+  },
+  "pipes": {
+    "telematics": {"method": "PUT", "path": "/remote-control/vehicle/telematics/{vin}"},
+    "charge": {"method": "POST", "path": "/charge-server/ecarx_charge_set/{vin}"}
+  },
+  "commands": {
+    "lock": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RDL", "timestamp": "{timestamp}"}},
+    "unlock": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RDU", "timestamp": "{timestamp}"}},
+    "climate_on": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RCE", "timestamp": "{timestamp}"}},
+    "climate_off": {"pipe": "telematics", "body": {"command": "stop", "serviceId": "RCE", "timestamp": "{timestamp}"}},
+    "set_temp": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RCE", "timestamp": "{timestamp}", "serviceParameters": [{"key": "temperature", "value": "{value}"}]}},
+    "defrost_on": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RDF", "timestamp": "{timestamp}"}},
+    "defrost_off": {"pipe": "telematics", "body": {"command": "stop", "serviceId": "RDF", "timestamp": "{timestamp}"}},
+    "g_clean_on": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RPC", "timestamp": "{timestamp}"}},
+    "g_clean_off": {"pipe": "telematics", "body": {"command": "stop", "serviceId": "RPC", "timestamp": "{timestamp}"}},
+    "seat_heat_driver": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RSH", "timestamp": "{timestamp}", "serviceParameters": [{"key": "level", "value": "{value}"}]}},
+    "seat_vent_driver": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RSV", "timestamp": "{timestamp}", "serviceParameters": [{"key": "level", "value": "{value}"}]}},
+    "find_car": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RHL", "timestamp": "{timestamp}"}},
+    "unlock_trunk": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RTU", "timestamp": "{timestamp}"}},
+    "sunroof_open": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RWS", "timestamp": "{timestamp}"}},
+    "sunroof_close": {"pipe": "telematics", "body": {"command": "stop", "serviceId": "RWS", "timestamp": "{timestamp}"}},
+    "refresh": {"pipe": "telematics", "body": {"command": "start", "serviceId": "RVS", "timestamp": "{timestamp}"}},
+    "rapid_cool": {"pipe": "charge", "body": {"bizType": 7, "mode": "cool"}},
+    "rapid_warm": {"pipe": "charge", "body": {"bizType": 7, "mode": "warm"}},
+    "scheduled_charge_on": {"pipe": "charge", "body": {"bizType": 6, "enable": true}},
+    "scheduled_charge_off": {"pipe": "charge", "body": {"bizType": 6, "enable": false}}
+  }
+}

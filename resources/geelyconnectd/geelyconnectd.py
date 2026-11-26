@@ -9,7 +9,7 @@ import signal
 import sys
 import threading
 
-from geely_api import GeelyApiClient, GeelyApiError
+from geely_api import GeelyApiClient, GeelyApiError, SessionInvalidated
 from jeedom.jeedom import (
     JeedomCallback,
     JeedomSocketServer,
@@ -20,13 +20,14 @@ from jeedom.jeedom import (
 
 
 class GeelyConnectDaemon:
-    """Coordinates periodic vehicle polling and authenticated localhost control commands."""
+    """Coordinates polling, interactive authentication, and authenticated localhost commands."""
 
     def __init__(self, bootstrap_cfg, pid_file):
         self.pid_file = pid_file
         self.stop_event = threading.Event()
         self.sync_event = threading.Event()
         self.lock = threading.Lock()
+        self.session_invalid_notified = False
 
         self.poll_interval = max(1, int(bootstrap_cfg.get('poll_interval', 5))) * 60
         self.vins = [str(v).upper() for v in bootstrap_cfg.get('vins', []) if v]
@@ -48,6 +49,23 @@ class GeelyConnectDaemon:
             on_message=self.handle_socket_message,
         )
 
+    # -------------------------------------------------------------- events
+
+    def _notify_session_invalid(self, reason):
+        """Notify Jeedom once per invalidation so the admin can re-authenticate."""
+        if self.session_invalid_notified:
+            return
+        self.session_invalid_notified = True
+        logging.warning('Session invalidated: %s', reason)
+        self.callback.send({'event': 'session_invalidated', 'message': str(reason)})
+
+    def _notify_session_ok(self):
+        if self.session_invalid_notified:
+            self.session_invalid_notified = False
+        self.callback.send({'event': 'session_ok'})
+
+    # -------------------------------------------------------------- socket
+
     def handle_socket_message(self, message):
         """Process authenticated commands received from Jeedom PHP."""
         action = message.get('action')
@@ -65,78 +83,112 @@ class GeelyConnectDaemon:
             self.sync_event.set()
             return {'configured': True}
 
+        if action == 'reload_endpoints':
+            with self.lock:
+                self.api.reload_endpoints()
+            return {'reloaded': True}
+
+        if action == 'auth_status':
+            with self.lock:
+                return self.api.auth_status()
+
+        if action == 'auth_start':
+            with self.lock:
+                return self.api.auth_start(
+                    email=message.get('email', self.api.username),
+                    country_code=message.get('country_code', self.api.country_code),
+                )
+
         if action == 'request_otp':
             with self.lock:
                 return self.api.request_otp(
                     email=message.get('email', self.api.username),
                     country_code=message.get('country_code', self.api.country_code),
+                    captcha=message.get('captcha') or {},
                 )
 
         if action == 'verify_otp':
             with self.lock:
-                return self.api.verify_otp_and_provision_mtls(
+                result = self.api.verify_otp_and_provision_mtls(
                     email=message.get('email', self.api.username),
                     otp_code=message.get('otp_code', ''),
                     country_code=message.get('country_code', self.api.country_code),
                 )
+            self._notify_session_ok()
+            self.sync_event.set()
+            return result
+
+        if action == 'provision_mtls':
+            with self.lock:
+                return self.api.provision_mtls()
 
         if action == 'sync':
+            self.session_invalid_notified = False
             self.sync_event.set()
             return {'sync_queued': True}
 
         if action == 'command':
             vin = str(message.get('vin', '')).upper()
             command = str(message.get('command', ''))
-            value = message.get('value')
             if not vin:
                 raise ValueError('Missing VIN for vehicle command.')
             with self.lock:
-                result = self.api.send_command(vin, command, value=value)
-                status = self.api.get_vehicle_status(vin)
-                self.callback.send({'vehicles': [status]})
+                try:
+                    result = self.api.send_command(vin, command, value=message.get('value'))
+                    status = self.api.get_vehicle_status(vin)
+                except SessionInvalidated as exc:
+                    self._notify_session_invalid(exc)
+                    raise
+            self.callback.send({'vehicles': [status]})
             return result
 
         raise ValueError(f'Unknown socket action: {action}')
 
+    # -------------------------------------------------------------- polling
+
     def poll_once(self):
-        """Discover vehicles and capabilities if needed and push latest telemetry to Jeedom."""
+        """Discover vehicles and push telemetry. Skips silently while the session is invalid."""
         with self.lock:
-            target_vins = list(self.vins)
             try:
+                target_vins = list(self.vins)
                 if not target_vins:
                     discovered = self.api.get_vehicles()
-                    target_vins = [str(v.get('vin', '')).upper() for v in discovered if v.get('vin')]
+                    target_vins = [str(_v.get('vin', '')).upper() for _v in discovered if isinstance(_v, dict) and _v.get('vin')]
                     if target_vins:
                         self.vins = target_vins
 
-                telemetry_batch = []
+                batch = []
                 for vin in target_vins:
                     status = self.api.get_vehicle_status(vin)
                     caps = self.api.get_vehicle_capabilities(vin)
                     if caps.get('powertrain'):
                         status['powertrain'] = caps['powertrain']
-                    status['capabilities'] = caps.get('features', {})
-                    telemetry_batch.append(status)
-
-                if telemetry_batch:
-                    self.callback.send({'vehicles': telemetry_batch})
+                    batch.append(status)
+            except SessionInvalidated as exc:
+                self._notify_session_invalid(exc)
+                return
             except GeelyApiError as exc:
                 logging.error('Polling cycle failed: %s', exc)
-            except Exception as exc:
+                return
+            except Exception as exc:  # noqa: BLE001 - keep daemon alive
                 logging.exception('Unexpected error during polling cycle: %s', exc)
+                return
+
+        if batch:
+            self.callback.send({'vehicles': batch})
 
     def run(self):
-        """Start socket server and run polling loop until termination signal."""
+        """Start the socket server and run the polling loop until a termination signal."""
         write_pid(self.pid_file)
         self.socket_server.start()
         logging.info('Geely Connect daemon started (poll interval: %ds).', self.poll_interval)
-
         self.sync_event.set()
 
         while not self.stop_event.is_set():
             if self.sync_event.is_set():
                 self.sync_event.clear()
-                self.poll_once()
+                if not self.session_invalid_notified:
+                    self.poll_once()
             triggered = self.sync_event.wait(timeout=self.poll_interval)
             if not triggered and not self.stop_event.is_set():
                 self.sync_event.set()
@@ -147,7 +199,7 @@ class GeelyConnectDaemon:
 
 
 def load_and_shred_bootstrap(path):
-    """Read bootstrap JSON containing credentials and delete it from disk immediately."""
+    """Read the bootstrap JSON containing credentials and delete it immediately."""
     if not path or not os.path.exists(path):
         raise FileNotFoundError('Daemon bootstrap file not found.')
     with open(path, 'r', encoding='utf-8') as handle:
@@ -171,7 +223,7 @@ def main():
 
     try:
         bootstrap_cfg = load_and_shred_bootstrap(args.bootstrap)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logging.critical('Failed to load bootstrap configuration: %s', exc)
         sys.exit(1)
 
@@ -184,7 +236,6 @@ def main():
 
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
-
     daemon.run()
 
 

@@ -169,15 +169,102 @@ try {
         ajax::success();
     }
 
+    if ($action === 'authStart') {
+        $email = trim((string) init('email', config::byKey('username', 'geelyconnect', '')));
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new Exception(__('A valid email address is required.', __FILE__));
+        }
+        $countryCode = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) init('country_code', config::byKey('country_code', 'geelyconnect', 'ES'))));
+        $result = geelyconnect::sendToDaemon(array(
+            'action' => 'auth_start',
+            'email' => $email,
+            'country_code' => $countryCode ?: 'ES'
+        ), 45);
+        ajax::success($result);
+    }
+
     if ($action === 'requestOtp') {
         $email = trim((string) init('email', config::byKey('username', 'geelyconnect', '')));
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new Exception(__('A valid email address is required.', __FILE__));
+        }
         $countryCode = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) init('country_code', config::byKey('country_code', 'geelyconnect', 'ES'))));
+
+        // Accept only known captcha result fields solved by the admin in the browser.
+        $captchaRaw = json_decode((string) init('captcha', '{}'), true);
+        $captcha = array();
+        $allowedKeys = array('lot_number', 'captcha_output', 'pass_token', 'gen_time', 'captcha_id', 'geetest_challenge', 'geetest_validate', 'geetest_seccode');
+        if (is_array($captchaRaw)) {
+            foreach ($allowedKeys as $key) {
+                if (isset($captchaRaw[$key]) && is_scalar($captchaRaw[$key]) && strlen((string) $captchaRaw[$key]) <= 1024) {
+                    $captcha[$key] = (string) $captchaRaw[$key];
+                }
+            }
+        }
+
         $result = geelyconnect::sendToDaemon(array(
             'action' => 'request_otp',
             'email' => $email,
-            'country_code' => $countryCode ?: 'ES'
-        ));
+            'country_code' => $countryCode ?: 'ES',
+            'captcha' => $captcha
+        ), 45);
         ajax::success($result);
+    }
+
+    if ($action === 'authStatus') {
+        $result = geelyconnect::sendToDaemon(array('action' => 'auth_status'));
+        $result['session_state'] = (string) config::byKey('session_state', 'geelyconnect', 'unknown');
+        ajax::success($result);
+    }
+
+    if ($action === 'provisionMtls') {
+        ajax::success(geelyconnect::sendToDaemon(array('action' => 'provision_mtls'), 90));
+    }
+
+    if ($action === 'getEndpointOverrides') {
+        $path = geelyconnect::getDataDir() . '/endpoints.json';
+        ajax::success(array('json' => file_exists($path) ? (string) file_get_contents($path) : ''));
+    }
+
+    if ($action === 'saveEndpointOverrides') {
+        $raw = trim((string) init('json', ''));
+        $path = geelyconnect::getDataDir() . '/endpoints.json';
+        if ($raw === '') {
+            if (file_exists($path)) {
+                @unlink($path);
+            }
+        } else {
+            if (strlen($raw) > 65536) {
+                throw new Exception(__('Endpoint override is too large (max 64 KB).', __FILE__));
+            }
+            $decoded = json_decode($raw, true);
+            if (!is_array($decoded)) {
+                throw new Exception(__('Endpoint override must be a valid JSON object.', __FILE__));
+            }
+            // Defense in depth: only allow Geely HTTPS hosts so tokens cannot be exfiltrated.
+            if (isset($decoded['base_urls'])) {
+                if (!is_array($decoded['base_urls'])) {
+                    throw new Exception(__('base_urls must be an object.', __FILE__));
+                }
+                foreach ($decoded['base_urls'] as $url) {
+                    $host = strtolower((string) parse_url((string) $url, PHP_URL_HOST));
+                    $scheme = strtolower((string) parse_url((string) $url, PHP_URL_SCHEME));
+                    if ($scheme !== 'https' || !preg_match('/(^|\.)(ecloudeu|xcloudsvc|ecloudus|ecloudkr)\.com$/', $host)) {
+                        throw new Exception(__('base_urls may only point to Geely HTTPS API hosts.', __FILE__));
+                    }
+                }
+            }
+            $oldUmask = umask(0077);
+            file_put_contents($path, json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            umask($oldUmask);
+            @chmod($path, 0600);
+        }
+        try {
+            geelyconnect::sendToDaemon(array('action' => 'reload_endpoints'));
+        } catch (Exception $e) {
+            log::add('geelyconnect', 'info', 'Endpoint overrides saved; daemon not running, will apply on next start.');
+        }
+        ajax::success();
     }
 
     if ($action === 'verifyOtp') {
@@ -192,7 +279,8 @@ try {
             'email' => $email,
             'otp_code' => $otpCode,
             'country_code' => $countryCode ?: 'ES'
-        ));
+        ), 120);
+        config::save('session_state', 'active', 'geelyconnect');
         ajax::success($result);
     }
 

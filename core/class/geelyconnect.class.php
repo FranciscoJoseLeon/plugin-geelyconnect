@@ -86,12 +86,25 @@ class geelyconnect extends eqLogic {
     }
 
     /**
+     * Return the persistent plugin data directory (0700).
+     *
+     * @return string
+     */
+    public static function getDataDir() {
+        $dir = __DIR__ . '/../../data';
+        if (!is_dir($dir)) {
+            mkdir($dir, 0700, true);
+        }
+        return realpath($dir) ?: $dir;
+    }
+
+    /**
      * Return the persistent directory for mTLS certificates (0700).
      *
      * @return string
      */
     public static function getCertDir() {
-        $dir = __DIR__ . '/../../data/certs';
+        $dir = self::getDataDir() . '/certs';
         if (!is_dir($dir)) {
             mkdir($dir, 0700, true);
         }
@@ -288,7 +301,7 @@ class geelyconnect extends eqLogic {
      * @return array<string, mixed>
      * @throws Exception
      */
-    public static function sendToDaemon(array $payload) {
+    public static function sendToDaemon(array $payload, $timeout = 20) {
         $port = self::getSocketPort();
         $payload['apikey'] = jeedom::getApiKey('geelyconnect');
 
@@ -297,7 +310,7 @@ class geelyconnect extends eqLogic {
             throw new Exception(__('Unable to connect to Geely Connect daemon: ', __FILE__) . $errstr . ' (' . $errno . ')');
         }
 
-        stream_set_timeout($socket, 20);
+        stream_set_timeout($socket, max(5, (int) $timeout));
         $encoded = json_encode($payload) . "\n";
         fwrite($socket, $encoded);
 

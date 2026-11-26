@@ -29,6 +29,7 @@ $hasUnlockPin = !empty(config::byKey('unlock_pin', 'geelyconnect', ''));
 $hasCaCert = file_exists($certDir . '/ca.crt');
 $hasMtlsCert = file_exists($certDir . '/client.crt') && file_exists($certDir . '/client.key');
 $hasSession = file_exists($certDir . '/session.json');
+$sessionState = (string) config::byKey('session_state', 'geelyconnect', 'unknown');
 ?>
 
 <form class="form-horizontal">
@@ -110,6 +111,9 @@ $hasSession = file_exists($certDir . '/session.json');
                 <?php else : ?>
                     <span class="label label-default"><i class="fas fa-key"></i> {{No Session}}</span>
                 <?php endif; ?>
+                <?php if ($sessionState === 'invalid') : ?>
+                    <span class="label label-danger"><i class="fas fa-user-slash"></i> {{Session Invalidated - Login Again}}</span>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -126,11 +130,14 @@ $hasSession = file_exists($certDir . '/session.json');
         </div>
 
         <div class="form-group">
-            <label class="col-md-4 control-label">{{Step 1: Email Verification}}</label>
+            <label class="col-md-4 control-label">{{Step 1: Start Login &amp; Send OTP}}
+                <sup><i class="fas fa-question-circle tooltips" title="{{If Geely requires a human verification challenge, it is displayed here and must be solved by you. The plugin never solves challenges automatically.}}"></i></sup>
+            </label>
             <div class="col-md-6">
                 <button type="button" class="btn btn-info" id="bt_geelyconnect_request_otp">
-                    <i class="fas fa-envelope"></i> {{Send 6-Digit OTP to Email}}
+                    <i class="fas fa-envelope"></i> {{Start Login &amp; Send 6-Digit OTP}}
                 </button>
+                <div id="geelyconnect_captcha_box" style="margin-top:8px;"></div>
             </div>
         </div>
 
@@ -176,8 +183,21 @@ $hasSession = file_exists($certDir . '/session.json');
                         <button type="button" class="btn btn-success btn-sm" id="bt_geelyconnect_save_certs">
                             <i class="fas fa-save"></i> {{Save Certificates &amp; Tokens}}
                         </button>
+                        <button type="button" class="btn btn-info btn-sm" id="bt_geelyconnect_provision_mtls" style="margin-left:6px;">
+                            <i class="fas fa-id-card"></i> {{Provision mTLS via Local CSR}}
+                        </button>
                         <button type="button" class="btn btn-danger btn-sm" id="bt_geelyconnect_clear_certs" style="margin-left:6px;">
                             <i class="fas fa-trash"></i> {{Clear All Certificates}}
+                        </button>
+                        <hr style="margin:12px 0;">
+                        <label>{{Endpoint Overrides (data/endpoints.json, optional)}}</label>
+                        <textarea id="geelyconnect_endpoints_json" class="form-control" rows="4" placeholder='{"auth":{"send_code":"/auth/account/code/send"}}'></textarea>
+                        <br>
+                        <button type="button" class="btn btn-default btn-xs" id="bt_geelyconnect_load_endpoints">
+                            <i class="fas fa-sync"></i> {{Load Current Overrides}}
+                        </button>
+                        <button type="button" class="btn btn-primary btn-xs" id="bt_geelyconnect_save_endpoints" style="margin-left:6px;">
+                            <i class="fas fa-save"></i> {{Save Endpoint Overrides}}
                         </button>
                     </div>
                 </div>
@@ -332,12 +352,84 @@ $hasSession = file_exists($certDir . '/session.json');
         });
     });
 
-    $('#bt_geelyconnect_request_otp').off('click').on('click', function () {
+    function sendOtpRequest(captchaResult) {
         $.ajax({
             type: 'POST',
             url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
             data: {
                 action: 'requestOtp',
+                email: $('#geelyconnect_username_input').val(),
+                country_code: $('#geelyconnect_country_input').val(),
+                captcha: JSON.stringify(captchaResult || {})
+            },
+            dataType: 'json',
+            error: function (request, status, error) {
+                handleAjaxError(request, status, error);
+            },
+            success: function (data) {
+                if (data.state !== 'ok') {
+                    $('#div_alert').showAlert({message: data.result, level: 'danger'});
+                    return;
+                }
+                $('#geelyconnect_captcha_box').empty();
+                $('#div_alert').showAlert({message: '{{OTP verification email sent. Enter the 6-digit code below.}}', level: 'success'});
+            }
+        });
+    }
+
+    function renderInteractiveCaptcha(captcha) {
+        var $box = $('#geelyconnect_captcha_box').empty();
+        if (!captcha || captcha.type === 'none') {
+            sendOtpRequest({});
+            return;
+        }
+        $box.html('<span class="label label-info">{{Complete the verification challenge below to send your OTP:}}</span><div id="geelyconnect_gt_container" style="margin-top:6px;"></div>');
+
+        if (captcha.type === 'geetest_v4' && captcha.captcha_id) {
+            $.getScript('https://static.geetest.com/v4/gt4.js', function () {
+                if (typeof initGeetest4 !== 'function') {
+                    $('#div_alert').showAlert({message: '{{Failed to load GeeTest v4 widget.}}', level: 'danger'});
+                    return;
+                }
+                initGeetest4({captchaId: captcha.captcha_id, product: 'bind'}, function (captchaObj) {
+                    captchaObj.onReady(function () {
+                        captchaObj.showCaptcha();
+                    }).onSuccess(function () {
+                        sendOtpRequest(captchaObj.getValidate());
+                    });
+                });
+            });
+            return;
+        }
+
+        if (captcha.type === 'geetest_v3' && captcha.gt && captcha.challenge) {
+            $.getScript('https://static.geetest.com/static/js/gt.js', function () {
+                if (typeof initGeetest !== 'function') {
+                    $('#div_alert').showAlert({message: '{{Failed to load GeeTest v3 widget.}}', level: 'danger'});
+                    return;
+                }
+                initGeetest({
+                    gt: captcha.gt,
+                    challenge: captcha.challenge,
+                    offline: !!captcha.offline,
+                    new_captcha: !!captcha.new_captcha,
+                    product: 'popup'
+                }, function (captchaObj) {
+                    captchaObj.appendTo('#geelyconnect_gt_container');
+                    captchaObj.onSuccess(function () {
+                        sendOtpRequest(captchaObj.getValidate());
+                    });
+                });
+            });
+        }
+    }
+
+    $('#bt_geelyconnect_request_otp').off('click').on('click', function () {
+        $.ajax({
+            type: 'POST',
+            url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
+            data: {
+                action: 'authStart',
                 email: $('#geelyconnect_username_input').val(),
                 country_code: $('#geelyconnect_country_input').val()
             },
@@ -350,7 +442,62 @@ $hasSession = file_exists($certDir . '/session.json');
                     $('#div_alert').showAlert({message: data.result, level: 'danger'});
                     return;
                 }
-                $('#div_alert').showAlert({message: '{{OTP verification email sent. Enter the 6-digit code below.}}', level: 'success'});
+                renderInteractiveCaptcha((data.result && data.result.captcha) ? data.result.captcha : {type: 'none'});
+            }
+        });
+    });
+
+    $('#bt_geelyconnect_provision_mtls').off('click').on('click', function () {
+        $.ajax({
+            type: 'POST',
+            url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
+            data: {action: 'provisionMtls'},
+            dataType: 'json',
+            error: function (request, status, error) {
+                handleAjaxError(request, status, error);
+            },
+            success: function (data) {
+                if (data.state !== 'ok') {
+                    $('#div_alert').showAlert({message: data.result, level: 'danger'});
+                    return;
+                }
+                $('#div_alert').showAlert({message: '{{mTLS client certificate generated and provisioned!}}', level: 'success'});
+            }
+        });
+    });
+
+    $('#bt_geelyconnect_load_endpoints').off('click').on('click', function () {
+        $.ajax({
+            type: 'POST',
+            url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
+            data: {action: 'getEndpointOverrides'},
+            dataType: 'json',
+            success: function (data) {
+                if (data.state === 'ok') {
+                    $('#geelyconnect_endpoints_json').val(data.result.json || '');
+                }
+            }
+        });
+    });
+
+    $('#bt_geelyconnect_save_endpoints').off('click').on('click', function () {
+        $.ajax({
+            type: 'POST',
+            url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
+            data: {
+                action: 'saveEndpointOverrides',
+                json: $('#geelyconnect_endpoints_json').val()
+            },
+            dataType: 'json',
+            error: function (request, status, error) {
+                handleAjaxError(request, status, error);
+            },
+            success: function (data) {
+                if (data.state !== 'ok') {
+                    $('#div_alert').showAlert({message: data.result, level: 'danger'});
+                    return;
+                }
+                $('#div_alert').showAlert({message: '{{Endpoint overrides saved and applied.}}', level: 'success'});
             }
         });
     });
