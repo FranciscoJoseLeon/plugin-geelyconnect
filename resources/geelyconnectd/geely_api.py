@@ -12,7 +12,10 @@ Features:
 - Single-session invalidation detection (raises SessionInvalidated).
 """
 
+import base64
 import copy
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -262,6 +265,16 @@ class GeelyApiClient:
         body_code = str(_pick(body, 'code', 'errorCode', 'error_code', default='')) if isinstance(body, dict) else ''
         return status_code in (401, 403) or (body_code and body_code in codes)
 
+    def _compute_signature(self, method, path, timestamp, nonce, body_str):
+        """Compute ECARX X-SIGNATURE (HMAC-SHA1) when signing.app_secret is configured."""
+        signing = self.endpoints.get('signing') or {}
+        secret = signing.get('app_secret') or ''
+        if not secret:
+            return ''
+        canonical = f'{method.upper()}\n{path}\n{timestamp}\n{nonce}\n{body_str}'
+        digest = hmac.new(secret.encode('utf-8'), canonical.encode('utf-8'), hashlib.sha1).digest()
+        return base64.b64encode(digest).decode('ascii')
+
     def _request(self, method, path, payload=None, authenticated=True, allow_refresh=True):
         """Execute an HTTPS request with strict TLS, optional mTLS, and session-invalidation handling."""
         if not path:
@@ -269,7 +282,19 @@ class GeelyApiClient:
         if authenticated:
             self.ensure_authenticated()
 
-        headers = {'X-Timestamp': str(int(time.time() * 1000))}
+        timestamp = str(int(time.time() * 1000))
+        nonce = uuid.uuid4().hex
+        body_str = json.dumps(payload, separators=(',', ':')) if payload is not None else ''
+        signing = self.endpoints.get('signing') or {}
+        headers = {'X-Timestamp': timestamp}
+        nonce_header = signing.get('nonce_header')
+        if nonce_header:
+            headers[nonce_header] = nonce
+        sig = self._compute_signature(method, path, timestamp, nonce, body_str)
+        sig_header = signing.get('signature_header')
+        if sig and sig_header:
+            headers[sig_header] = sig
+
         country_header = self.endpoints.get('country_header')
         device_header = self.endpoints.get('device_header')
         if country_header:

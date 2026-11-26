@@ -189,7 +189,7 @@ class geelyconnect extends eqLogic {
 
         $pollInterval = max(1, (int) config::byKey('poll_interval', 'geelyconnect', self::DEFAULT_POLL_INTERVAL));
         $region = strtoupper(trim((string) config::byKey('region', 'geelyconnect', 'EU')));
-        if (!in_array($region, array('EU', 'GLOBAL', 'APAC'), true)) {
+        if (!in_array($region, array('EU', 'GLOBAL', 'US', 'APAC'), true)) {
             $region = 'EU';
         }
         $countryCode = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) config::byKey('country_code', 'geelyconnect', 'ES')));

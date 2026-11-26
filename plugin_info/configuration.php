@@ -79,6 +79,7 @@ $sessionState = (string) config::byKey('session_state', 'geelyconnect', 'unknown
                 <select class="configKey form-control" data-l1key="region">
                     <option value="EU">{{Europe (EU)}}</option>
                     <option value="GLOBAL">{{Global (GLOBAL)}}</option>
+                    <option value="US">{{Americas (US)}}</option>
                     <option value="APAC">{{Asia-Pacific (APAC)}}</option>
                 </select>
             </div>

@@ -52,7 +52,13 @@ try {
 
     if ($action === 'fetchServerCa') {
         $region = strtoupper(trim((string) init('region', config::byKey('region', 'geelyconnect', 'EU'))));
-        $host = ($region === 'APAC') ? 'apis.xcloudsvc.com' : 'apis.ecloudeu.com';
+        $hostMap = array(
+            'EU' => 'apis.ecloudeu.com',
+            'GLOBAL' => 'apis.ecloudeu.com',
+            'US' => 'api.ecloudus.com',
+            'APAC' => 'api.ecloudkr.com',
+        );
+        $host = isset($hostMap[$region]) ? $hostMap[$region] : 'apis.ecloudeu.com';
 
         $ctx = stream_context_create(array(
             'ssl' => array(

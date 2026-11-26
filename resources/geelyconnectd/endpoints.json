@@ -16,12 +16,20 @@
   "base_urls": {
     "EU": "https://apis.ecloudeu.com",
     "GLOBAL": "https://apis.ecloudeu.com",
-    "APAC": "https://apis.xcloudsvc.com"
+    "US": "https://api.ecloudus.com",
+    "APAC": "https://api.ecloudkr.com"
   },
   "static_headers": {
     "Accept": "application/json",
     "Content-Type": "application/json",
-    "User-Agent": "GeelyConnect-Jeedom/1.2.0"
+    "User-Agent": "GeelyConnect-Jeedom/1.2.0",
+    "x-agent-type": "Android"
+  },
+  "signing": {
+    "algorithm": "hmac-sha1",
+    "signature_header": "X-SIGNATURE",
+    "nonce_header": "X-Api-Signature-Nonce",
+    "app_secret": ""
   },
   "country_header": "X-Country-Code",
   "device_header": "X-Device-Id",
@@ -29,12 +37,13 @@
   "session_invalid_codes": ["401", "40101", "TOKEN_EXPIRED", "SESSION_KICKED", "LOGIN_ELSEWHERE"],
   "csr_key_type": "rsa:2048",
   "auth": {
-    "captcha_init": "/auth/captcha/init",
+    "captcha_init": "/cidpsso/user/v3/login",
     "send_code": "/auth/account/code/send",
     "verify_code": "/auth/account/code/verify",
+    "session": "/auth/account/session",
     "refresh": "/auth/account/session/refresh",
-    "password_login": "",
-    "provision_cert": "/auth/device/certificate"
+    "password_login": "/cidpsso/user/v3/login",
+    "provision_cert": "/device-platform"
   },
   "account": {
     "profile": "/auth/account/profile"
