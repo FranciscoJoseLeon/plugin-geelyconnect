@@ -22,10 +22,13 @@ if (!isConnect('admin')) {
     throw new Exception('{{401 - Unauthorized access}}');
 }
 
-// Check server-side whether secrets are stored without ever exposing them to the DOM.
+// Check server-side whether secrets and certificates are stored without ever exposing them to the DOM.
+$certDir = geelyconnect::getCertDir();
 $hasStoredPassword = !empty(config::byKey('password', 'geelyconnect', ''));
 $hasUnlockPin = !empty(config::byKey('unlock_pin', 'geelyconnect', ''));
-$hasMtlsCert = file_exists(geelyconnect::getCertDir() . '/client.crt');
+$hasCaCert = file_exists($certDir . '/ca.crt');
+$hasMtlsCert = file_exists($certDir . '/client.crt') && file_exists($certDir . '/client.key');
+$hasSession = file_exists($certDir . '/session.json');
 ?>
 
 <form class="form-horizontal">
@@ -87,16 +90,38 @@ $hasMtlsCert = file_exists(geelyconnect::getCertDir() . '/client.crt');
             </div>
         </div>
 
-        <legend><i class="fas fa-certificate"></i> {{Geely Global OTP &amp; mTLS Device Certificate}}</legend>
+        <legend><i class="fas fa-certificate"></i> {{Geely Global OTP, TLS CA &amp; mTLS Certificate Manager}}</legend>
 
         <div class="form-group">
-            <label class="col-md-4 control-label">{{mTLS Certificate Status}}</label>
+            <label class="col-md-4 control-label">{{Certificate &amp; Session Status}}</label>
             <div class="col-md-6">
-                <?php if ($hasMtlsCert) : ?>
-                    <span class="label label-success"><i class="fas fa-check-circle"></i> {{mTLS Certificate Provisioned}}</span>
+                <?php if ($hasCaCert) : ?>
+                    <span class="label label-success"><i class="fas fa-shield-alt"></i> {{CA Pinned}}</span>
                 <?php else : ?>
-                    <span class="label label-default"><i class="fas fa-info-circle"></i> {{Not Provisioned (Optional for EU, Required for Geely Global OTP)}}</span>
+                    <span class="label label-warning"><i class="fas fa-exclamation-triangle"></i> {{CA Not Pinned}}</span>
                 <?php endif; ?>
+                <?php if ($hasMtlsCert) : ?>
+                    <span class="label label-success"><i class="fas fa-check-circle"></i> {{mTLS Provisioned}}</span>
+                <?php else : ?>
+                    <span class="label label-default"><i class="fas fa-info-circle"></i> {{mTLS Not Set}}</span>
+                <?php endif; ?>
+                <?php if ($hasSession) : ?>
+                    <span class="label label-success"><i class="fas fa-key"></i> {{Session Active}}</span>
+                <?php else : ?>
+                    <span class="label label-default"><i class="fas fa-key"></i> {{No Session}}</span>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="col-md-4 control-label">{{Step 0: Pin Geely Server CA}}
+                <sup><i class="fas fa-question-circle tooltips" title="{{Fetches and pins the Geely cloud server TLS certificate chain into data/certs/ca.crt (0600) so strict TLS verification succeeds.}}"></i></sup>
+            </label>
+            <div class="col-md-6">
+                <button type="button" class="btn btn-primary" id="bt_geelyconnect_fetch_ca">
+                    <i class="fas fa-download"></i> {{Fetch &amp; Pin Server CA Certificate}}
+                </button>
+                <span id="geelyconnect_ca_fingerprint" style="margin-left:8px;font-size:11px;color:#94a3b8;"></span>
             </div>
         </div>
 
@@ -119,6 +144,42 @@ $hasMtlsCert = file_exists(geelyconnect::getCertDir() . '/client.crt');
                             <i class="fas fa-key"></i> {{Verify OTP}}
                         </button>
                     </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="col-md-4 control-label">{{Manual Certificate / Token Import}}
+                <sup><i class="fas fa-question-circle tooltips" title="{{Optional: paste PEM certificates or session tokens directly. Saved with 0600 permissions and never echoed back.}}"></i></sup>
+            </label>
+            <div class="col-md-6">
+                <a class="btn btn-default btn-sm" role="button" data-toggle="collapse" href="#geelyconnect_manual_certs" aria-expanded="false">
+                    <i class="fas fa-file-signature"></i> {{Open Built-in Certificate &amp; Token Manager}}
+                </a>
+                <div class="collapse" id="geelyconnect_manual_certs" style="margin-top:10px;">
+                    <div class="well" style="padding:12px;">
+                        <label>{{Custom CA Certificate (PEM - ca.crt)}}</label>
+                        <textarea id="geelyconnect_ca_crt" class="form-control" rows="3" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+                        <br>
+                        <label>{{mTLS Client Certificate (PEM - client.crt)}}</label>
+                        <textarea id="geelyconnect_client_crt" class="form-control" rows="3" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+                        <br>
+                        <label>{{mTLS Client Private Key (PEM - client.key)}}</label>
+                        <textarea id="geelyconnect_client_key" class="form-control" rows="3" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+                        <br>
+                        <label>{{Access Token (optional)}}</label>
+                        <input type="password" id="geelyconnect_access_token" class="form-control" autocomplete="off" placeholder="{{Paste access_token}}" />
+                        <br>
+                        <label>{{Refresh Token (optional)}}</label>
+                        <input type="password" id="geelyconnect_refresh_token" class="form-control" autocomplete="off" placeholder="{{Paste refresh_token}}" />
+                        <br>
+                        <button type="button" class="btn btn-success btn-sm" id="bt_geelyconnect_save_certs">
+                            <i class="fas fa-save"></i> {{Save Certificates &amp; Tokens}}
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm" id="bt_geelyconnect_clear_certs" style="margin-left:6px;">
+                            <i class="fas fa-trash"></i> {{Clear All Certificates}}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -198,6 +259,78 @@ $hasMtlsCert = file_exists(geelyconnect::getCertDir() . '/client.crt');
             });
         }
     }
+
+    $('#bt_geelyconnect_fetch_ca').off('click').on('click', function () {
+        $.ajax({
+            type: 'POST',
+            url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
+            data: {
+                action: 'fetchServerCa',
+                region: $('select[data-l1key="region"]').val()
+            },
+            dataType: 'json',
+            error: function (request, status, error) {
+                handleAjaxError(request, status, error);
+            },
+            success: function (data) {
+                if (data.state !== 'ok') {
+                    $('#div_alert').showAlert({message: data.result, level: 'danger'});
+                    return;
+                }
+                $('#geelyconnect_ca_fingerprint').text('Pinned ' + data.result.host + ' (SHA256: ' + data.result.sha256.substring(0, 16) + '...)');
+                $('#div_alert').showAlert({message: '{{Server CA certificate pinned securely. Please restart the daemon.}}', level: 'success'});
+            }
+        });
+    });
+
+    $('#bt_geelyconnect_save_certs').off('click').on('click', function () {
+        $.ajax({
+            type: 'POST',
+            url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
+            data: {
+                action: 'saveCertificates',
+                ca_crt: $('#geelyconnect_ca_crt').val(),
+                client_crt: $('#geelyconnect_client_crt').val(),
+                client_key: $('#geelyconnect_client_key').val(),
+                access_token: $('#geelyconnect_access_token').val(),
+                refresh_token: $('#geelyconnect_refresh_token').val()
+            },
+            dataType: 'json',
+            error: function (request, status, error) {
+                handleAjaxError(request, status, error);
+            },
+            success: function (data) {
+                if (data.state !== 'ok') {
+                    $('#div_alert').showAlert({message: data.result, level: 'danger'});
+                    return;
+                }
+                $('#geelyconnect_ca_crt, #geelyconnect_client_crt, #geelyconnect_client_key, #geelyconnect_access_token, #geelyconnect_refresh_token').val('');
+                $('#div_alert').showAlert({message: '{{Certificates and tokens saved securely (0600). Restart the daemon to apply.}}', level: 'success'});
+            }
+        });
+    });
+
+    $('#bt_geelyconnect_clear_certs').off('click').on('click', function () {
+        if (!window.confirm('{{Remove all stored CA, mTLS certificates, and session tokens?}}')) {
+            return;
+        }
+        $.ajax({
+            type: 'POST',
+            url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
+            data: {action: 'clearCertificates'},
+            dataType: 'json',
+            error: function (request, status, error) {
+                handleAjaxError(request, status, error);
+            },
+            success: function (data) {
+                if (data.state !== 'ok') {
+                    $('#div_alert').showAlert({message: data.result, level: 'danger'});
+                    return;
+                }
+                $('#div_alert').showAlert({message: '{{All certificates and session tokens cleared.}}', level: 'success'});
+            }
+        });
+    });
 
     $('#bt_geelyconnect_request_otp').off('click').on('click', function () {
         $.ajax({
