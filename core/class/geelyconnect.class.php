@@ -60,36 +60,16 @@ class geelyconnect extends eqLogic {
     }
 
     /**
-     * Install APT and Python virtual environment dependencies in the background.
+     * Install APT and Python virtual environment dependencies via Jeedom's standard install_#stype#.sh.
      *
      * @return array<string, string>
      */
     public static function dependancy_install() {
         log::remove(__CLASS__ . '_dep');
-        $resourcesDir = realpath(__DIR__ . '/../../resources');
-        $venvDir = $resourcesDir . '/venv';
-        $progressFile = jeedom::getTmpFolder(__CLASS__) . '/dependancy';
-        $logFile = log::getPathToLog(__CLASS__ . '_dep');
-
-        $script = implode(' && ', array(
-            'echo 0 > ' . escapeshellarg($progressFile),
-            'echo "=== Installing Geely Connect dependencies ==="',
-            'sudo apt-get update',
-            'echo 25 > ' . escapeshellarg($progressFile),
-            'sudo apt-get install -y python3-venv python3-pip',
-            'echo 50 > ' . escapeshellarg($progressFile),
-            'rm -rf ' . escapeshellarg($venvDir) . ' && python3 -m venv ' . escapeshellarg($venvDir),
-            'echo 70 > ' . escapeshellarg($progressFile),
-            escapeshellarg($venvDir . '/bin/pip') . ' install --upgrade pip',
-            'echo 85 > ' . escapeshellarg($progressFile),
-            escapeshellarg($venvDir . '/bin/pip') . ' install "requests>=2.31.0" "pycryptodomex>=3.19.0"',
-            'echo 100 > ' . escapeshellarg($progressFile),
-            'echo "=== Dependencies installed successfully ==="',
-            'rm -f ' . escapeshellarg($progressFile)
-        ));
-
-        exec('nohup bash -c ' . escapeshellarg($script) . ' >> ' . escapeshellarg($logFile) . ' 2>&1 &');
-        return array('script' => $script, 'log' => $logFile);
+        return array(
+            'script' => __DIR__ . '/../../resources/install_#stype#.sh ' . jeedom::getTmpFolder(__CLASS__) . '/dependancy',
+            'log' => log::getPathToLog(__CLASS__ . '_dep')
+        );
     }
 
     /**
