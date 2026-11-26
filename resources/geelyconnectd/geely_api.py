@@ -9,9 +9,9 @@ import logging
 import os
 import time
 import requests
-from Crypto.Cipher import AES, PKCS1_v1_5
-from Crypto.PublicKey import RSA
-from Crypto.Util.Padding import pad
+from Cryptodome.Cipher import AES, PKCS1_v1_5
+from Cryptodome.PublicKey import RSA
+from Cryptodome.Util.Padding import pad
 
 
 class GeelyApiError(Exception):

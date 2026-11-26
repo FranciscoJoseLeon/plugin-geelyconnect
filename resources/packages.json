@@ -7,7 +7,7 @@
     "requests": {
       "version": ">=2.31.0"
     },
-    "pycryptodome": {
+    "pycryptodomex": {
       "version": ">=3.19.0"
     }
   }

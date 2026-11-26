@@ -51,7 +51,7 @@ class geelyconnect extends eqLogic {
         if (file_exists($pythonBin) && is_executable($pythonBin)) {
             $output = array();
             $exitCode = 1;
-            exec(escapeshellcmd($pythonBin) . ' -c "import requests, Crypto" 2>/dev/null', $output, $exitCode);
+            exec(escapeshellcmd($pythonBin) . ' -c "import requests, Cryptodome" 2>/dev/null', $output, $exitCode);
             if ($exitCode === 0) {
                 $return['state'] = 'ok';
             }
@@ -78,11 +78,11 @@ class geelyconnect extends eqLogic {
             'echo 25 > ' . escapeshellarg($progressFile),
             'sudo apt-get install -y python3-venv python3-pip',
             'echo 50 > ' . escapeshellarg($progressFile),
-            'python3 -m venv ' . escapeshellarg($venvDir),
+            'rm -rf ' . escapeshellarg($venvDir) . ' && python3 -m venv ' . escapeshellarg($venvDir),
             'echo 70 > ' . escapeshellarg($progressFile),
             escapeshellarg($venvDir . '/bin/pip') . ' install --upgrade pip',
             'echo 85 > ' . escapeshellarg($progressFile),
-            escapeshellarg($venvDir . '/bin/pip') . ' install "requests>=2.31.0" "pycryptodome>=3.19.0"',
+            escapeshellarg($venvDir . '/bin/pip') . ' install "requests>=2.31.0" "pycryptodomex>=3.19.0"',
             'echo 100 > ' . escapeshellarg($progressFile),
             'echo "=== Dependencies installed successfully ==="',
             'rm -f ' . escapeshellarg($progressFile)
