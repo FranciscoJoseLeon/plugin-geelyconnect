@@ -51,7 +51,7 @@ class geelyconnect extends eqLogic {
         if (file_exists($pythonBin) && is_executable($pythonBin)) {
             $output = array();
             $exitCode = 1;
-            exec(escapeshellcmd($pythonBin) . ' -c "import requests, Cryptodome" 2>/dev/null', $output, $exitCode);
+            exec(escapeshellcmd($pythonBin) . ' -c "import requests" 2>/dev/null', $output, $exitCode);
             if ($exitCode === 0) {
                 $return['state'] = 'ok';
             }

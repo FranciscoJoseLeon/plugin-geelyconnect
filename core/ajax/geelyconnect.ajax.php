@@ -19,11 +19,11 @@ try {
     require_once dirname(__FILE__) . '/../../../../core/php/core.inc.php';
     include_file('core', 'authentification', 'php');
 
+    ajax::init();
+
     if (!isConnect('admin')) {
         throw new Exception(__('401 - Unauthorized access', __FILE__));
     }
-
-    ajax::init();
 
     $action = init('action');
 
