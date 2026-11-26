@@ -243,25 +243,26 @@ class geelyconnect extends eqLogic {
             @unlink($bootstrapFile);
         }
 
-        if (!file_exists($pidFile)) {
-            return;
+        if (file_exists($pidFile)) {
+            $pid = (int) trim((string) @file_get_contents($pidFile));
+            if ($pid > 0 && @posix_getpgid($pid) !== false) {
+                log::add('geelyconnect', 'info', __('Stopping Geely Connect daemon...', __FILE__));
+                @posix_kill($pid, SIGTERM);
+                $wait = 0;
+                while ($wait < 10 && @posix_getpgid($pid) !== false) {
+                    usleep(250000);
+                    $wait++;
+                }
+                if (@posix_getpgid($pid) !== false) {
+                    @posix_kill($pid, SIGKILL);
+                }
+            }
+            @unlink($pidFile);
         }
 
-        $pid = (int) trim((string) @file_get_contents($pidFile));
-        if ($pid > 0 && @posix_getpgid($pid) !== false) {
-            log::add('geelyconnect', 'info', __('Stopping Geely Connect daemon...', __FILE__));
-            @posix_kill($pid, SIGTERM);
-            $wait = 0;
-            while ($wait < 10 && @posix_getpgid($pid) !== false) {
-                usleep(250000);
-                $wait++;
-            }
-            if (@posix_getpgid($pid) !== false) {
-                @posix_kill($pid, SIGKILL);
-            }
-        }
-
-        @unlink($pidFile);
+        // Clean up any orphaned geelyconnectd.py process holding the socket port.
+        exec('pkill -f "geelyconnectd/geelyconnectd.py" 2>/dev/null');
+        usleep(300000);
     }
 
     /**
