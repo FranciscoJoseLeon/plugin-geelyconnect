@@ -28,7 +28,9 @@ $hasStoredPassword = !empty(config::byKey('password', 'geelyconnect', ''));
 $hasUnlockPin = !empty(config::byKey('unlock_pin', 'geelyconnect', ''));
 $hasCaCert = file_exists($certDir . '/ca.crt');
 $hasMtlsCert = file_exists($certDir . '/client.crt') && file_exists($certDir . '/client.key');
-$hasSession = file_exists($certDir . '/session.json');
+$sessionFile = $certDir . '/session.json';
+$sessionJson = file_exists($sessionFile) ? json_decode((string) file_get_contents($sessionFile), true) : array();
+$hasSession = is_array($sessionJson) && (!empty($sessionJson['access_token']) || !empty($sessionJson['refresh_token']));
 $sessionState = (string) config::byKey('session_state', 'geelyconnect', 'unknown');
 ?>
 
