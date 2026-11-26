@@ -80,6 +80,31 @@ Geely Connect is built with defense-in-depth principles:
 
 ---
 
+## Obtaining Session Tokens & Certificates from Your Mobile App (Step-by-Step)
+
+Because Geely Global enforces proprietary mobile request signing (`X-SIGNATURE`), mTLS device certificates, and interactive GeeTest challenges on login, you can capture your own account's session tokens and certificates directly from the official Geely mobile app on your phone using **mitmproxy** on your PC:
+
+1. **Create a Secondary Geely Account (Recommended):**
+   - Geely enforces a **single active session per account**. Share your vehicle from your primary Geely app to a secondary email account so Jeedom does not log out your main phone.
+2. **Install and Start `mitmproxy` on Your PC:**
+   - Install `mitmproxy` (e.g., `pip install mitmproxy` or download from `mitmproxy.org`).
+   - Run `mitmweb` in a terminal on your PC (it opens a local web inspector at `http://127.0.0.1:8081` and listens on proxy port `8080`).
+3. **Point Your Phone's Wi-Fi to Your PC Proxy:**
+   - Ensure your phone and PC are on the same Wi-Fi network.
+   - On your phone's Wi-Fi settings, set **HTTP Proxy** to **Manual**, Server = `<Your PC IP>`, Port = `8080`.
+   - Open `http://mitm.it` in your phone's browser and install/trust the `mitmproxy` CA certificate (on Android/iOS, also enable trust in system security settings).
+4. **Sign In to the Official Geely App:**
+   - Log out (if logged in) and sign in with your secondary account email, solve the puzzle challenge, and enter the 6-digit email OTP.
+5. **Extract Your Tokens & Endpoints in `mitmweb`:**
+   - Filter traffic by `ecloudeu.com` (or `ecloudus.com` / `ecloudkr.com`).
+   - From the login/session response JSON, copy **`access_token`** and **`refresh_token`** (and **`client.crt`** / **`client.key`** if returned, or use **Provision mTLS via Local CSR** in Jeedom once the session is active).
+   - Note any custom endpoint paths or `X-SIGNATURE` parameters if needed for **Endpoint Overrides (`data/endpoints.json`)**.
+6. **Import into Jeedom & Clean Up Your Phone:**
+   - In Jeedom → **Geely Connect → Open Built-in Certificate & Token Manager**, paste your tokens/certificates and click **Save Certificates & Tokens**, then restart the **Daemon**.
+   - **Important:** Immediately disable the Wi-Fi proxy on your phone and delete the `mitmproxy` CA certificate from your phone's trusted credentials. Never share your tokens or private keys.
+
+---
+
 ## Disclaimer & Limitation of Liability
 
 - **No Official Affiliation:** Geely Connect is an independent, community-developed plugin and is **not** affiliated with, endorsed by, or supported by Geely Auto or Zhejiang Geely Holding Group.
