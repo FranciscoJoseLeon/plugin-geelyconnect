@@ -7,8 +7,26 @@ import hmac
 import json
 import logging
 import os
+import ssl
 import time
 import requests
+from requests.adapters import HTTPAdapter
+
+
+class _PinnedCertAdapter(HTTPAdapter):
+    """HTTPAdapter that enforces strict hostname + pinned certificate verification (supporting partial chains)."""
+
+    def __init__(self, ca_bundle_path, **kwargs):
+        self.ca_bundle_path = ca_bundle_path
+        super().__init__(**kwargs)
+
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = ssl.create_default_context(cafile=self.ca_bundle_path)
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        ctx.check_hostname = True
+        ctx.verify_flags |= getattr(ssl, 'VERIFY_X509_PARTIAL_CHAIN', 0x80000)
+        kwargs['ssl_context'] = ctx
+        return super().init_poolmanager(*args, **kwargs)
 
 
 class GeelyApiError(Exception):
@@ -237,6 +255,8 @@ class GeelyApiClient:
             headers['Authorization'] = f'Bearer {self._access_token}'
 
         ca_bundle = os.path.join(self.cert_dir, 'ca.crt') if self.cert_dir else ''
+        if ca_bundle and os.path.exists(ca_bundle):
+            self.session.mount('https://', _PinnedCertAdapter(ca_bundle))
         tls_verify = ca_bundle if (ca_bundle and os.path.exists(ca_bundle)) else True
 
         try:
