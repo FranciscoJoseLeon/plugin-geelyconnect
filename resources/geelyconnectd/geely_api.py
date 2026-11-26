@@ -9,9 +9,6 @@ import logging
 import os
 import time
 import requests
-from Cryptodome.Cipher import AES, PKCS1_v1_5
-from Cryptodome.PublicKey import RSA
-from Cryptodome.Util.Padding import pad
 
 
 class GeelyApiError(Exception):
@@ -203,6 +200,10 @@ class GeelyApiClient:
         raw_json = json.dumps(payload_dict, separators=(',', ':')).encode('utf-8')
         if not self._rsa_public_key:
             return payload_dict
+
+        from Cryptodome.Cipher import AES, PKCS1_v1_5
+        from Cryptodome.PublicKey import RSA
+        from Cryptodome.Util.Padding import pad
 
         aes_key = os.urandom(32)
         iv = os.urandom(16)
