@@ -52,6 +52,38 @@ class GeelyApiClient:
 
         self._consecutive_failures = 0
         self._next_retry_at = 0.0
+        self._load_session()
+
+    def _session_file_path(self):
+        return os.path.join(self.cert_dir, 'session.json') if self.cert_dir else ''
+
+    def _load_session(self):
+        """Load persisted OTP/refresh tokens from 0600 session.json if available."""
+        path = self._session_file_path()
+        if not path or not os.path.exists(path):
+            return
+        try:
+            with open(path, 'r', encoding='utf-8') as fh:
+                data = json.load(fh)
+            self._access_token = data.get('access_token')
+            self._refresh_token = data.get('refresh_token')
+            self._token_expires_at = float(data.get('expires_at', 0.0))
+        except Exception:
+            pass
+
+    def _save_session(self):
+        """Persist active OTP/refresh tokens with strict 0600 permissions."""
+        path = self._session_file_path()
+        if not path:
+            return
+        os.makedirs(self.cert_dir, mode=0o750, exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as fh:
+            json.dump({
+                'access_token': self._access_token,
+                'refresh_token': self._refresh_token,
+                'expires_at': self._token_expires_at,
+            }, fh)
+        os.chmod(path, 0o600)
 
     def _resolve_mtls_pair(self):
         """Return (cert_path, key_path) tuple if mTLS device certificates exist on disk."""
@@ -83,6 +115,38 @@ class GeelyApiClient:
         self._token_expires_at = 0.0
         self._consecutive_failures = 0
         self._next_retry_at = 0.0
+        self._load_session()
+
+    def _session_file_path(self):
+        return os.path.join(self.cert_dir, 'session.json') if self.cert_dir else ''
+
+    def _load_session(self):
+        """Load persisted OTP/refresh tokens from 0600 session.json if available."""
+        path = self._session_file_path()
+        if not path or not os.path.exists(path):
+            return
+        try:
+            with open(path, 'r', encoding='utf-8') as fh:
+                data = json.load(fh)
+            self._access_token = data.get('access_token')
+            self._refresh_token = data.get('refresh_token')
+            self._token_expires_at = float(data.get('expires_at', 0.0))
+        except Exception:
+            pass
+
+    def _save_session(self):
+        """Persist active OTP/refresh tokens with strict 0600 permissions."""
+        path = self._session_file_path()
+        if not path:
+            return
+        os.makedirs(self.cert_dir, mode=0o750, exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as fh:
+            json.dump({
+                'access_token': self._access_token,
+                'refresh_token': self._refresh_token,
+                'expires_at': self._token_expires_at,
+            }, fh)
+        os.chmod(path, 0o600)
 
     def _record_auth_failure(self):
         """Apply exponential backoff to prevent account lockouts on repeated login failures."""
@@ -94,6 +158,38 @@ class GeelyApiClient:
     def _reset_backoff(self):
         self._consecutive_failures = 0
         self._next_retry_at = 0.0
+        self._load_session()
+
+    def _session_file_path(self):
+        return os.path.join(self.cert_dir, 'session.json') if self.cert_dir else ''
+
+    def _load_session(self):
+        """Load persisted OTP/refresh tokens from 0600 session.json if available."""
+        path = self._session_file_path()
+        if not path or not os.path.exists(path):
+            return
+        try:
+            with open(path, 'r', encoding='utf-8') as fh:
+                data = json.load(fh)
+            self._access_token = data.get('access_token')
+            self._refresh_token = data.get('refresh_token')
+            self._token_expires_at = float(data.get('expires_at', 0.0))
+        except Exception:
+            pass
+
+    def _save_session(self):
+        """Persist active OTP/refresh tokens with strict 0600 permissions."""
+        path = self._session_file_path()
+        if not path:
+            return
+        os.makedirs(self.cert_dir, mode=0o750, exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as fh:
+            json.dump({
+                'access_token': self._access_token,
+                'refresh_token': self._refresh_token,
+                'expires_at': self._token_expires_at,
+            }, fh)
+        os.chmod(path, 0o600)
 
     def _sign_request(self, method, path, timestamp, body_str):
         """Generate HMAC-SHA256 request signature for Geely Connect API requests."""
@@ -211,6 +307,7 @@ class GeelyApiClient:
             self._mtls_cert = (cert_path, key_path)
             logging.info('Provisioned mTLS client certificate securely.')
 
+        self._save_session()
         return {'verified': True, 'mtls_provisioned': bool(self._mtls_cert)}
 
     def ensure_authenticated(self):
@@ -235,7 +332,7 @@ class GeelyApiClient:
     def _do_login(self):
         """Authenticate against Geely Connect using configured credentials."""
         if not self.username or not self.password:
-            raise GeelyApiError('Missing Geely account credentials.')
+            raise GeelyApiError('Awaiting Email OTP verification in plugin configuration (no password configured).')
 
         login_body = self._encrypt_credentials_payload({
             'username': self.username,
@@ -276,6 +373,7 @@ class GeelyApiClient:
         self._access_token = token
         self._refresh_token = data.get('refresh_token', self._refresh_token)
         self._token_expires_at = time.time() + int(data.get('expires_in', 3600))
+        self._save_session()
 
     def get_vehicles(self):
         """Fetch list of vehicles linked to the Geely Connect account."""

@@ -42,8 +42,8 @@ $hasMtlsCert = file_exists(geelyconnect::getCertDir() . '/client.crt');
         </div>
 
         <div class="form-group">
-            <label class="col-md-4 control-label">{{Password}}
-                <sup><i class="fas fa-question-circle tooltips" title="{{Stored encrypted on the server. Leave blank to keep the currently saved password.}}"></i></sup>
+            <label class="col-md-4 control-label">{{Password (Optional)}}
+                <sup><i class="fas fa-question-circle tooltips" title="{{Optional for Geely Global accounts that use passwordless Email OTP. Stored encrypted on the server.}}"></i></sup>
             </label>
             <div class="col-md-6">
                 <div class="input-group">
@@ -53,7 +53,7 @@ $hasMtlsCert = file_exists(geelyconnect::getCertDir() . '/client.crt');
                            autocomplete="new-password"
                            value=""
                            data-has-password="<?php echo $hasStoredPassword ? '1' : '0'; ?>"
-                           placeholder="<?php echo $hasStoredPassword ? '{{Password saved (enter a new one to replace)}}' : '{{Enter your Geely account password}}'; ?>" />
+                           placeholder="<?php echo $hasStoredPassword ? '{{Password saved (enter a new one to replace)}}' : '{{Leave blank if using Email OTP login}}'; ?>" />
                     <span class="input-group-addon">
                         <?php if ($hasStoredPassword) : ?>
                             <span class="label label-success"><i class="fas fa-lock"></i> {{Configured}}</span>

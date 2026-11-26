@@ -162,11 +162,9 @@ class geelyconnect extends eqLogic {
         }
 
         $username = trim((string) config::byKey('username', 'geelyconnect', ''));
-        $password = (string) config::byKey('password', 'geelyconnect', '');
-        $hasMtls = file_exists(self::getCertDir() . '/client.crt');
-        if ($username === '' || ($password === '' && !$hasMtls)) {
+        if ($username === '') {
             $return['launchable'] = 'nok';
-            $return['launchable_message'] = __('Geely account username and password (or OTP/mTLS) must be configured.', __FILE__);
+            $return['launchable_message'] = __('Geely account email / username must be configured.', __FILE__);
             return $return;
         }
 
