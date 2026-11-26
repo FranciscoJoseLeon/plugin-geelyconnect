@@ -70,3 +70,19 @@ Geely Connect is built with defense-in-depth principles:
 | `unlock` | Unlock Doors | Confirmation + Optional PIN | Remotely unlocks the vehicle doors |
 | `climate_on` | Climate On | — | Starts cabin pre-conditioning |
 | `climate_off` | Climate Off | — | Stops cabin pre-conditioning |
+
+---
+
+## Best Practices & Battery Protection
+
+- **12V Battery Protection:** Keep the **Polling Interval** at `5` minutes or higher. Frequent polling (< 2 minutes) can repeatedly wake the vehicle's Telematics Control Unit (TCU) and accelerate 12V battery drain when parked for long periods.
+- **Unattended Vehicles:** Always verify physical door locks when leaving the vehicle in high-risk areas.
+
+---
+
+## Disclaimer & Limitation of Liability
+
+- **No Official Affiliation:** Geely Connect is an independent, community-developed plugin and is **not** affiliated with, endorsed by, or supported by Geely Auto or Zhejiang Geely Holding Group.
+- **AS-IS Warranty (AGPL):** This software is provided "as is" without warranty of any kind. The authors and contributors accept no liability for account lockouts, API disruptions, 12V battery discharge, or failed remote commands.
+- **Life-Safety Notice:** The **Vehicle Alarm**, **Sentry Mode**, and **Child & Pet Cabin Guard** features depend on third-party cloud APIs and cellular connectivity. **Never** leave children or pets unattended inside a vehicle relying on this plugin or any home automation alert.
+
