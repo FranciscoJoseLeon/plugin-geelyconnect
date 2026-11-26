@@ -44,6 +44,62 @@ class geelyconnect extends eqLogic {
     }
 
     /**
+     * Report dependency installation status to Jeedom Core.
+     *
+     * @return array<string, mixed>
+     */
+    public static function dependancy_info() {
+        $return = array();
+        $return['log'] = log::getPathToLog(__CLASS__ . '_dep');
+        $return['progress_file'] = jeedom::getTmpFolder(__CLASS__) . '/dependancy';
+        $return['state'] = 'nok';
+
+        $pythonBin = self::getPythonBinary();
+        if (file_exists($pythonBin) && is_executable($pythonBin)) {
+            $output = array();
+            $exitCode = 1;
+            exec(escapeshellcmd($pythonBin) . ' -c "import requests, Crypto" 2>/dev/null', $output, $exitCode);
+            if ($exitCode === 0) {
+                $return['state'] = 'ok';
+            }
+        }
+        return $return;
+    }
+
+    /**
+     * Install APT and Python virtual environment dependencies in the background.
+     *
+     * @return array<string, string>
+     */
+    public static function dependancy_install() {
+        log::remove(__CLASS__ . '_dep');
+        $resourcesDir = realpath(__DIR__ . '/../../resources');
+        $venvDir = $resourcesDir . '/venv';
+        $progressFile = jeedom::getTmpFolder(__CLASS__) . '/dependancy';
+        $logFile = log::getPathToLog(__CLASS__ . '_dep');
+
+        $script = implode(' && ', array(
+            'echo 0 > ' . escapeshellarg($progressFile),
+            'echo "=== Installing Geely Connect dependencies ==="',
+            'sudo apt-get update',
+            'echo 25 > ' . escapeshellarg($progressFile),
+            'sudo apt-get install -y python3-venv python3-pip',
+            'echo 50 > ' . escapeshellarg($progressFile),
+            'python3 -m venv ' . escapeshellarg($venvDir),
+            'echo 70 > ' . escapeshellarg($progressFile),
+            escapeshellarg($venvDir . '/bin/pip') . ' install --upgrade pip',
+            'echo 85 > ' . escapeshellarg($progressFile),
+            escapeshellarg($venvDir . '/bin/pip') . ' install "requests>=2.31.0" "pycryptodome>=3.19.0"',
+            'echo 100 > ' . escapeshellarg($progressFile),
+            'echo "=== Dependencies installed successfully ==="',
+            'rm -f ' . escapeshellarg($progressFile)
+        ));
+
+        exec('nohup bash -c ' . escapeshellarg($script) . ' >> ' . escapeshellarg($logFile) . ' 2>&1 &');
+        return array('script' => $script, 'log' => $logFile);
+    }
+
+    /**
      * Return the path to the daemon runtime directory inside Jeedom tmp folder.
      *
      * @return string
