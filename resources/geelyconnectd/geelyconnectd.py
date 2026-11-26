@@ -39,6 +39,8 @@ class GeelyConnectDaemon:
             username=bootstrap_cfg.get('username', ''),
             password=bootstrap_cfg.get('password', ''),
             region=bootstrap_cfg.get('region', 'EU'),
+            country_code=bootstrap_cfg.get('country_code', 'ES'),
+            cert_dir=bootstrap_cfg.get('cert_dir', ''),
         )
         self.socket_server = JeedomSocketServer(
             port=bootstrap_cfg.get('socketport', 55099),
@@ -58,9 +60,25 @@ class GeelyConnectDaemon:
                     username=message.get('username', self.api.username),
                     password=message.get('password', self.api.password),
                     region=message.get('region', self.api.region),
+                    country_code=message.get('country_code', self.api.country_code),
                 )
             self.sync_event.set()
             return {'configured': True}
+
+        if action == 'request_otp':
+            with self.lock:
+                return self.api.request_otp(
+                    email=message.get('email', self.api.username),
+                    country_code=message.get('country_code', self.api.country_code),
+                )
+
+        if action == 'verify_otp':
+            with self.lock:
+                return self.api.verify_otp_and_provision_mtls(
+                    email=message.get('email', self.api.username),
+                    otp_code=message.get('otp_code', ''),
+                    country_code=message.get('country_code', self.api.country_code),
+                )
 
         if action == 'sync':
             self.sync_event.set()
@@ -69,19 +87,19 @@ class GeelyConnectDaemon:
         if action == 'command':
             vin = str(message.get('vin', '')).upper()
             command = str(message.get('command', ''))
+            value = message.get('value')
             if not vin:
                 raise ValueError('Missing VIN for vehicle command.')
             with self.lock:
-                result = self.api.send_command(vin, command)
-                if command == 'refresh':
-                    status = self.api.get_vehicle_status(vin)
-                    self.callback.send({'vehicles': [status]})
+                result = self.api.send_command(vin, command, value=value)
+                status = self.api.get_vehicle_status(vin)
+                self.callback.send({'vehicles': [status]})
             return result
 
         raise ValueError(f'Unknown socket action: {action}')
 
     def poll_once(self):
-        """Discover vehicles if needed and push latest telemetry to Jeedom."""
+        """Discover vehicles and capabilities if needed and push latest telemetry to Jeedom."""
         with self.lock:
             target_vins = list(self.vins)
             try:
@@ -93,7 +111,12 @@ class GeelyConnectDaemon:
 
                 telemetry_batch = []
                 for vin in target_vins:
-                    telemetry_batch.append(self.api.get_vehicle_status(vin))
+                    status = self.api.get_vehicle_status(vin)
+                    caps = self.api.get_vehicle_capabilities(vin)
+                    if caps.get('powertrain'):
+                        status['powertrain'] = caps['powertrain']
+                    status['capabilities'] = caps.get('features', {})
+                    telemetry_batch.append(status)
 
                 if telemetry_batch:
                     self.callback.send({'vehicles': telemetry_batch})
@@ -108,14 +131,12 @@ class GeelyConnectDaemon:
         self.socket_server.start()
         logging.info('Geely Connect daemon started (poll interval: %ds).', self.poll_interval)
 
-        # Trigger initial poll shortly after startup.
         self.sync_event.set()
 
         while not self.stop_event.is_set():
             if self.sync_event.is_set():
                 self.sync_event.clear()
                 self.poll_once()
-            # Wait for next poll interval or immediate sync wake-up.
             triggered = self.sync_event.wait(timeout=self.poll_interval)
             if not triggered and not self.stop_event.is_set():
                 self.sync_event.set()

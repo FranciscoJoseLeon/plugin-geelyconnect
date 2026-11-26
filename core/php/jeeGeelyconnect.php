@@ -46,6 +46,11 @@ foreach ($vehicles as $vehicleData) {
         continue;
     }
 
+    $modelName = isset($vehicleData['model']) ? preg_replace('/[^A-Za-z0-9 _.-]/', '', trim((string) $vehicleData['model'])) : 'Geely Vehicle';
+    $year = isset($vehicleData['year']) ? preg_replace('/[^0-9]/', '', (string) $vehicleData['year']) : '';
+    $trim = isset($vehicleData['trim']) ? preg_replace('/[^A-Za-z0-9 _.-]/', '', trim((string) $vehicleData['trim'])) : '';
+    $powertrain = isset($vehicleData['powertrain']) ? strtoupper(preg_replace('/[^A-Za-z]/', '', (string) $vehicleData['powertrain'])) : 'EV';
+
     $matchedEqLogic = null;
     foreach (eqLogic::byType('geelyconnect') as $eqLogic) {
         if (strtoupper(trim((string) $eqLogic->getConfiguration('vin', ''))) === $vin) {
@@ -54,18 +59,30 @@ foreach ($vehicles as $vehicleData) {
         }
     }
 
-    // Auto-create equipment when a new vehicle is discovered on the Geely account.
     if (!is_object($matchedEqLogic)) {
-        $modelName = isset($vehicleData['model']) ? trim((string) $vehicleData['model']) : 'Geely Vehicle';
         $matchedEqLogic = new geelyconnect();
         $matchedEqLogic->setEqType_name('geelyconnect');
         $matchedEqLogic->setName(substr($modelName, 0, 48) . ' (' . substr($vin, -4) . ')');
         $matchedEqLogic->setConfiguration('vin', $vin);
         $matchedEqLogic->setConfiguration('model', $modelName);
+        $matchedEqLogic->setConfiguration('year', $year);
+        $matchedEqLogic->setConfiguration('trim', $trim);
+        $matchedEqLogic->setConfiguration('powertrain', $powertrain);
         $matchedEqLogic->setConfiguration('useCustomWidget', '1');
         $matchedEqLogic->setIsEnable(1);
         $matchedEqLogic->setIsVisible(1);
         $matchedEqLogic->save();
+    } else {
+        $changed = false;
+        foreach (array('model' => $modelName, 'year' => $year, 'trim' => $trim, 'powertrain' => $powertrain) as $cfgKey => $cfgVal) {
+            if ($cfgVal !== '' && $matchedEqLogic->getConfiguration($cfgKey, '') !== $cfgVal) {
+                $matchedEqLogic->setConfiguration($cfgKey, $cfgVal);
+                $changed = true;
+            }
+        }
+        if ($changed) {
+            $matchedEqLogic->save();
+        }
     }
 
     if ($matchedEqLogic->getIsEnable() != 1) {
@@ -73,22 +90,49 @@ foreach ($vehicles as $vehicleData) {
     }
 
     $matchedEqLogic->checkAndUpdateCmd('vin', $vin);
+    $matchedEqLogic->checkAndUpdateCmd('model_info', trim($modelName . ($year !== '' ? ' ' . $year : '') . ($trim !== '' ? ' ' . $trim : '')));
 
-    if (isset($vehicleData['soc']) && is_numeric($vehicleData['soc'])) {
-        $matchedEqLogic->checkAndUpdateCmd('soc', max(0, min(100, (float) $vehicleData['soc'])));
+    $numericFields = array(
+        'soc' => array(0, 100),
+        'range' => array(0, 2000),
+        'range_full' => array(0, 2000),
+        'charging_power_kw' => array(0, 500),
+        'time_to_full_min' => array(0, 3000),
+        'target_temp' => array(16, 30),
+        'interior_temp' => array(-50, 90),
+        'exterior_temp' => array(-50, 70),
+        'battery_12v' => array(0, 20),
+        'tpms_fl' => array(0, 6),
+        'tpms_fr' => array(0, 6),
+        'tpms_rl' => array(0, 6),
+        'tpms_rr' => array(0, 6),
+        'service_days' => array(0, 2000),
+        'service_km' => array(0, 200000),
+        'odometer' => array(0, 2000000),
+        'fuel_level' => array(0, 100),
+        'fuel_range' => array(0, 2000)
+    );
+    foreach ($numericFields as $field => $bounds) {
+        if (isset($vehicleData[$field]) && is_numeric($vehicleData[$field])) {
+            $val = max($bounds[0], min($bounds[1], (float) $vehicleData[$field]));
+            $matchedEqLogic->checkAndUpdateCmd($field, $val);
+        }
     }
-    if (isset($vehicleData['range']) && is_numeric($vehicleData['range'])) {
-        $matchedEqLogic->checkAndUpdateCmd('range', max(0, (float) $vehicleData['range']));
+
+    $binaryFields = array(
+        'plug_status', 'scheduled_charge', 'lock_status', 'climate_status',
+        'defrost_status', 'g_clean_status', 'door_fl', 'door_fr', 'door_rl', 'door_rr',
+        'trunk_open', 'hood_open', 'sunroof_open', 'windows_open', 'driver_seatbelt'
+    );
+    foreach ($binaryFields as $field) {
+        if (isset($vehicleData[$field])) {
+            $matchedEqLogic->checkAndUpdateCmd($field, ((int) $vehicleData[$field]) ? 1 : 0);
+        }
     }
+
     if (isset($vehicleData['charging_status'])) {
         $charging = preg_replace('/[^A-Za-z0-9_ -]/', '', (string) $vehicleData['charging_status']);
         $matchedEqLogic->checkAndUpdateCmd('charging_status', $charging);
-    }
-    if (isset($vehicleData['lock_status'])) {
-        $matchedEqLogic->checkAndUpdateCmd('lock_status', ((int) $vehicleData['lock_status']) ? 1 : 0);
-    }
-    if (isset($vehicleData['climate_status'])) {
-        $matchedEqLogic->checkAndUpdateCmd('climate_status', ((int) $vehicleData['climate_status']) ? 1 : 0);
     }
     if (isset($vehicleData['location'])) {
         $loc = trim((string) $vehicleData['location']);
@@ -96,15 +140,14 @@ foreach ($vehicles as $vehicleData) {
             $matchedEqLogic->checkAndUpdateCmd('location', $loc);
         }
     }
-    if (isset($vehicleData['odometer']) && is_numeric($vehicleData['odometer'])) {
-        $matchedEqLogic->checkAndUpdateCmd('odometer', max(0, (float) $vehicleData['odometer']));
-    }
     if (isset($vehicleData['last_update'])) {
         $ts = preg_replace('/[^0-9A-Za-z:T._ -]/', '', (string) $vehicleData['last_update']);
         $matchedEqLogic->checkAndUpdateCmd('last_update', $ts);
     } else {
         $matchedEqLogic->checkAndUpdateCmd('last_update', date('Y-m-d H:i:s'));
     }
+
+    $matchedEqLogic->evaluateAlertsAndGuards($vehicleData);
 }
 
 echo json_encode(array('status' => 'ok'));

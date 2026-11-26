@@ -63,10 +63,17 @@ $eqLogics = eqLogic::byType($plugin->getId());
                 <?php
                 foreach ($eqLogics as $eqLogic) {
                     $opacity = ($eqLogic->getIsEnable()) ? '' : 'disableCard';
+                    $model = htmlspecialchars((string) $eqLogic->getConfiguration('model', ''), ENT_QUOTES, 'UTF-8');
+                    $year = htmlspecialchars((string) $eqLogic->getConfiguration('year', ''), ENT_QUOTES, 'UTF-8');
+                    $powertrain = htmlspecialchars(strtoupper((string) $eqLogic->getConfiguration('powertrain', 'EV')), ENT_QUOTES, 'UTF-8');
+                    $subtitle = trim($model . ($year !== '' ? ' ' . $year : '')) . ' [' . $powertrain . ']';
                     echo '<div class="eqLogicDisplayCard cursor ' . $opacity . '" data-eqLogic_id="' . $eqLogic->getId() . '">';
                     echo '<img src="' . $plugin->getPathImgIcon() . '" />';
                     echo '<br>';
                     echo '<span class="name">' . $eqLogic->getHumanName(true, true) . '</span>';
+                    if ($model !== '') {
+                        echo '<br><span style="font-size:11px;color:#38bdf8;">' . $subtitle . '</span>';
+                    }
                     echo '</div>';
                 }
                 ?>
@@ -140,7 +147,7 @@ $eqLogics = eqLogic::byType($plugin->getId());
                         </div>
 
                         <div class="col-lg-6">
-                            <legend><i class="fas fa-car-side"></i> {{Vehicle Settings}}</legend>
+                            <legend><i class="fas fa-car-side"></i> {{Vehicle Identity &amp; Capabilities}}</legend>
                             <div class="form-group">
                                 <label class="col-sm-4 control-label">{{VIN}}
                                     <sup><i class="fas fa-question-circle tooltips" title="{{17-character Vehicle Identification Number.}}"></i></sup>
@@ -152,7 +159,26 @@ $eqLogics = eqLogic::byType($plugin->getId());
                             <div class="form-group">
                                 <label class="col-sm-4 control-label">{{Model}}</label>
                                 <div class="col-sm-6">
-                                    <input type="text" class="eqLogicAttr form-control" data-l1key="configuration" data-l2key="model" placeholder="Geometry C / Galaxy E5" />
+                                    <input type="text" class="eqLogicAttr form-control" data-l1key="configuration" data-l2key="model" placeholder="Geely EX5 / Geometry C / Starray" />
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="col-sm-4 control-label">{{Year / Trim}}</label>
+                                <div class="col-sm-3">
+                                    <input type="text" class="eqLogicAttr form-control" data-l1key="configuration" data-l2key="year" placeholder="2025" maxlength="4" />
+                                </div>
+                                <div class="col-sm-3">
+                                    <input type="text" class="eqLogicAttr form-control" data-l1key="configuration" data-l2key="trim" placeholder="Max / Pro" />
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="col-sm-4 control-label">{{Powertrain}}</label>
+                                <div class="col-sm-6">
+                                    <select class="eqLogicAttr form-control" data-l1key="configuration" data-l2key="powertrain">
+                                        <option value="EV">{{Electric (EV)}}</option>
+                                        <option value="PHEV">{{Plug-in Hybrid (PHEV)}}</option>
+                                        <option value="ICE">{{Combustion / Hybrid (ICE)}}</option>
+                                    </select>
                                 </div>
                             </div>
                             <div class="form-group">

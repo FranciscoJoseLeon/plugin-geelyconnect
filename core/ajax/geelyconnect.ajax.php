@@ -50,6 +50,33 @@ try {
         ajax::success();
     }
 
+    if ($action === 'requestOtp') {
+        $email = trim((string) init('email', config::byKey('username', 'geelyconnect', '')));
+        $countryCode = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) init('country_code', config::byKey('country_code', 'geelyconnect', 'ES'))));
+        $result = geelyconnect::sendToDaemon(array(
+            'action' => 'request_otp',
+            'email' => $email,
+            'country_code' => $countryCode ?: 'ES'
+        ));
+        ajax::success($result);
+    }
+
+    if ($action === 'verifyOtp') {
+        $email = trim((string) init('email', config::byKey('username', 'geelyconnect', '')));
+        $otpCode = preg_replace('/[^0-9]/', '', (string) init('otp_code', ''));
+        $countryCode = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) init('country_code', config::byKey('country_code', 'geelyconnect', 'ES'))));
+        if (strlen($otpCode) !== 6) {
+            throw new Exception(__('OTP code must be 6 digits.', __FILE__));
+        }
+        $result = geelyconnect::sendToDaemon(array(
+            'action' => 'verify_otp',
+            'email' => $email,
+            'otp_code' => $otpCode,
+            'country_code' => $countryCode ?: 'ES'
+        ));
+        ajax::success($result);
+    }
+
     if ($action === 'syncVehicles') {
         $result = geelyconnect::sendToDaemon(array(
             'action' => 'sync'
@@ -61,6 +88,7 @@ try {
         $eqLogicId = (int) init('eqLogic_id');
         $commandName = init('command');
         $pin = init('pin', '');
+        $value = init('value', null);
 
         $eqLogic = geelyconnect::byId($eqLogicId);
         if (!is_object($eqLogic) || $eqLogic->getEqType_name() !== 'geelyconnect') {
@@ -75,6 +103,9 @@ try {
         $options = array();
         if ($pin !== '') {
             $options['pin'] = $pin;
+        }
+        if ($value !== null && $value !== '') {
+            $options['slider'] = $value;
         }
         $cmd->execCmd($options);
         ajax::success(array('executed' => $commandName));

@@ -19,19 +19,12 @@ require_once __DIR__ . '/../../../../core/php/core.inc.php';
 
 /**
  * Main eqLogic class for Geely Connect.
- * Manages vehicle equipment, daemon lifecycle, command provisioning,
- * and custom automotive dashboard/mobile widget rendering.
+ * Manages vehicle equipment, dependency/daemon lifecycle, capability-driven commands,
+ * sensor-based alerts, Jeedom alarm & sentry/child-pet guards, and custom automotive widgets.
  */
 class geelyconnect extends eqLogic {
 
-    /**
-     * Default local TCP socket port for PHP-to-daemon communication.
-     */
     const DEFAULT_SOCKET_PORT = 55099;
-
-    /**
-     * Default polling interval in minutes.
-     */
     const DEFAULT_POLL_INTERVAL = 5;
 
     /**
@@ -113,6 +106,19 @@ class geelyconnect extends eqLogic {
     }
 
     /**
+     * Return the persistent directory for mTLS certificates (0700).
+     *
+     * @return string
+     */
+    public static function getCertDir() {
+        $dir = __DIR__ . '/../../data/certs';
+        if (!is_dir($dir)) {
+            mkdir($dir, 0700, true);
+        }
+        return realpath($dir) ?: $dir;
+    }
+
+    /**
      * Return the configured local socket port, validated within safe bounds.
      *
      * @return int
@@ -157,9 +163,10 @@ class geelyconnect extends eqLogic {
 
         $username = trim((string) config::byKey('username', 'geelyconnect', ''));
         $password = (string) config::byKey('password', 'geelyconnect', '');
-        if ($username === '' || $password === '') {
+        $hasMtls = file_exists(self::getCertDir() . '/client.crt');
+        if ($username === '' || ($password === '' && !$hasMtls)) {
             $return['launchable'] = 'nok';
-            $return['launchable_message'] = __('Geely account username and password must be configured.', __FILE__);
+            $return['launchable_message'] = __('Geely account username and password (or OTP/mTLS) must be configured.', __FILE__);
             return $return;
         }
 
@@ -167,9 +174,7 @@ class geelyconnect extends eqLogic {
     }
 
     /**
-     * Start the Geely Connect Python daemon.
-     * Credentials and API key are passed exclusively via a 0600 bootstrap file
-     * (never via CLI process arguments) and updated over the localhost TCP socket.
+     * Start the Geely Connect Python daemon via a 0600 bootstrap file.
      *
      * @return void
      * @throws Exception
@@ -196,6 +201,10 @@ class geelyconnect extends eqLogic {
         if (!in_array($region, array('EU', 'GLOBAL', 'APAC'), true)) {
             $region = 'EU';
         }
+        $countryCode = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) config::byKey('country_code', 'geelyconnect', 'ES')));
+        if ($countryCode === '') {
+            $countryCode = 'ES';
+        }
 
         $bootstrapPayload = array(
             'apikey' => jeedom::getApiKey('geelyconnect'),
@@ -203,12 +212,13 @@ class geelyconnect extends eqLogic {
             'username' => (string) config::byKey('username', 'geelyconnect', ''),
             'password' => (string) config::byKey('password', 'geelyconnect', ''),
             'region' => $region,
+            'country_code' => $countryCode,
+            'cert_dir' => self::getCertDir(),
             'poll_interval' => $pollInterval,
             'socketport' => self::getSocketPort(),
             'vins' => self::getConfiguredVins()
         );
 
-        // Write bootstrap config with strict 0600 permissions before launching the process.
         $oldUmask = umask(0077);
         $written = file_put_contents($bootstrapFile, json_encode($bootstrapPayload));
         umask($oldUmask);
@@ -308,7 +318,7 @@ class geelyconnect extends eqLogic {
             throw new Exception(__('Unable to connect to Geely Connect daemon: ', __FILE__) . $errstr . ' (' . $errno . ')');
         }
 
-        stream_set_timeout($socket, 15);
+        stream_set_timeout($socket, 20);
         $encoded = json_encode($payload) . "\n";
         fwrite($socket, $encoded);
 
@@ -348,6 +358,7 @@ class geelyconnect extends eqLogic {
                 'username' => (string) config::byKey('username', 'geelyconnect', ''),
                 'password' => (string) config::byKey('password', 'geelyconnect', ''),
                 'region' => strtoupper(trim((string) config::byKey('region', 'geelyconnect', 'EU'))),
+                'country_code' => strtoupper(trim((string) config::byKey('country_code', 'geelyconnect', 'ES'))),
                 'poll_interval' => max(1, (int) config::byKey('poll_interval', 'geelyconnect', self::DEFAULT_POLL_INTERVAL)),
                 'vins' => self::getConfiguredVins()
             ));
@@ -357,33 +368,100 @@ class geelyconnect extends eqLogic {
     }
 
     /**
-     * Automatically provision all required Info and Action commands after saving an equipment.
+     * Automatically provision capability-driven Info, Alert, Guard, and Action commands.
      *
      * @return void
      */
     public function postSave() {
+        $powertrain = strtoupper((string) $this->getConfiguration('powertrain', 'EV'));
+
         $infoCommands = array(
             'vin' => array('name' => __('VIN', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 1),
-            'soc' => array('name' => __('State of Charge', __FILE__), 'subType' => 'numeric', 'unite' => '%', 'visible' => 1, 'order' => 2, 'min' => 0, 'max' => 100),
-            'range' => array('name' => __('Remaining Range', __FILE__), 'subType' => 'numeric', 'unite' => 'km', 'visible' => 1, 'order' => 3, 'min' => 0),
-            'charging_status' => array('name' => __('Charging Status', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 4),
-            'lock_status' => array('name' => __('Lock Status', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 5),
-            'climate_status' => array('name' => __('Climate Status', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 6),
-            'location' => array('name' => __('GPS Location', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 7),
-            'odometer' => array('name' => __('Odometer', __FILE__), 'subType' => 'numeric', 'unite' => 'km', 'visible' => 1, 'order' => 8, 'min' => 0),
-            'last_update' => array('name' => __('Last Sync', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 9)
+            'model_info' => array('name' => __('Vehicle Model', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 2),
+            'soc' => array('name' => __('State of Charge', __FILE__), 'subType' => 'numeric', 'unite' => '%', 'visible' => 1, 'order' => 3, 'min' => 0, 'max' => 100),
+            'range' => array('name' => __('Remaining Range', __FILE__), 'subType' => 'numeric', 'unite' => 'km', 'visible' => 1, 'order' => 4, 'min' => 0),
+            'range_full' => array('name' => __('Full Charge Range', __FILE__), 'subType' => 'numeric', 'unite' => 'km', 'visible' => 0, 'order' => 5, 'min' => 0),
+            'charging_status' => array('name' => __('Charging Status', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 6),
+            'charging_power_kw' => array('name' => __('Charging Power', __FILE__), 'subType' => 'numeric', 'unite' => 'kW', 'visible' => 1, 'order' => 7, 'min' => 0),
+            'plug_status' => array('name' => __('Charger Plugged In', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 8),
+            'time_to_full_min' => array('name' => __('Time to Full Charge', __FILE__), 'subType' => 'numeric', 'unite' => 'min', 'visible' => 1, 'order' => 9, 'min' => 0),
+            'scheduled_charge' => array('name' => __('Scheduled Charging', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 10),
+            'lock_status' => array('name' => __('Lock Status', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 11),
+            'climate_status' => array('name' => __('Climate Status', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 12),
+            'target_temp' => array('name' => __('Target Temperature', __FILE__), 'subType' => 'numeric', 'unite' => '°C', 'visible' => 1, 'order' => 13, 'min' => 16, 'max' => 30),
+            'defrost_status' => array('name' => __('Defrost Status', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 14),
+            'g_clean_status' => array('name' => __('G-Clean Status', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 15),
+            'interior_temp' => array('name' => __('Interior Temperature', __FILE__), 'subType' => 'numeric', 'unite' => '°C', 'visible' => 1, 'order' => 16),
+            'exterior_temp' => array('name' => __('Exterior Temperature', __FILE__), 'subType' => 'numeric', 'unite' => '°C', 'visible' => 1, 'order' => 17),
+            'battery_12v' => array('name' => __('12V Battery Voltage', __FILE__), 'subType' => 'numeric', 'unite' => 'V', 'visible' => 1, 'order' => 18),
+            'tpms_fl' => array('name' => __('Tire Pressure FL', __FILE__), 'subType' => 'numeric', 'unite' => 'bar', 'visible' => 1, 'order' => 19),
+            'tpms_fr' => array('name' => __('Tire Pressure FR', __FILE__), 'subType' => 'numeric', 'unite' => 'bar', 'visible' => 1, 'order' => 20),
+            'tpms_rl' => array('name' => __('Tire Pressure RL', __FILE__), 'subType' => 'numeric', 'unite' => 'bar', 'visible' => 1, 'order' => 21),
+            'tpms_rr' => array('name' => __('Tire Pressure RR', __FILE__), 'subType' => 'numeric', 'unite' => 'bar', 'visible' => 1, 'order' => 22),
+            'door_fl' => array('name' => __('Door Front Left', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 23),
+            'door_fr' => array('name' => __('Door Front Right', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 24),
+            'door_rl' => array('name' => __('Door Rear Left', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 25),
+            'door_rr' => array('name' => __('Door Rear Right', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 26),
+            'trunk_open' => array('name' => __('Trunk Open', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 27),
+            'hood_open' => array('name' => __('Hood Open', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 28),
+            'sunroof_open' => array('name' => __('Sunroof Open', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 29),
+            'windows_open' => array('name' => __('Windows Open', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 30),
+            'driver_seatbelt' => array('name' => __('Driver Seatbelt', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 0, 'order' => 31),
+            'service_days' => array('name' => __('Service Due (Days)', __FILE__), 'subType' => 'numeric', 'unite' => 'd', 'visible' => 0, 'order' => 32),
+            'service_km' => array('name' => __('Service Due (km)', __FILE__), 'subType' => 'numeric', 'unite' => 'km', 'visible' => 0, 'order' => 33),
+            'location' => array('name' => __('GPS Location', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 34),
+            'odometer' => array('name' => __('Odometer', __FILE__), 'subType' => 'numeric', 'unite' => 'km', 'visible' => 1, 'order' => 35, 'min' => 0),
+            'last_update' => array('name' => __('Last Sync', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 36),
+            // Sensor-based alerts and Jeedom Alarm / Sentry / Child & Pet Guard states
+            'alarm_armed' => array('name' => __('Vehicle Alarm Armed', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 37),
+            'alarm_triggered' => array('name' => __('Vehicle Alarm Triggered', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 38),
+            'sentry_mode' => array('name' => __('Sentry Mode Active', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 39),
+            'sentry_alert' => array('name' => __('Sentry Intrusion Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 40),
+            'child_pet_guard' => array('name' => __('Child & Pet Cabin Guard', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 41),
+            'cabin_overheat_alert' => array('name' => __('Cabin Overheat / Cold Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 42),
+            'tpms_alert' => array('name' => __('Low Tire Pressure Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 43),
+            'open_while_locked_alert' => array('name' => __('Open While Locked Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 44),
+            'low_12v_alert' => array('name' => __('Low 12V Battery Alert', __FILE__), 'subType' => 'binary', 'unite' => '', 'visible' => 1, 'order' => 45),
+            'alert_message' => array('name' => __('Active Alerts Summary', __FILE__), 'subType' => 'string', 'unite' => '', 'visible' => 1, 'order' => 46)
         );
+
+        if (in_array($powertrain, array('PHEV', 'ICE', 'HYBRID'), true)) {
+            $infoCommands['fuel_level'] = array('name' => __('Fuel Level', __FILE__), 'subType' => 'numeric', 'unite' => '%', 'visible' => 1, 'order' => 47, 'min' => 0, 'max' => 100);
+            $infoCommands['fuel_range'] = array('name' => __('Fuel Range', __FILE__), 'subType' => 'numeric', 'unite' => 'km', 'visible' => 1, 'order' => 48, 'min' => 0);
+        }
 
         foreach ($infoCommands as $logicalId => $meta) {
             $this->ensureCommand($logicalId, 'info', $meta);
         }
 
         $actionCommands = array(
-            'refresh' => array('name' => __('Refresh', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 10),
-            'lock' => array('name' => __('Lock Doors', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 11),
-            'unlock' => array('name' => __('Unlock Doors', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 12, 'confirm' => 1),
-            'climate_on' => array('name' => __('Climate On', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 13),
-            'climate_off' => array('name' => __('Climate Off', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 14)
+            'refresh' => array('name' => __('Refresh', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 50),
+            'lock' => array('name' => __('Lock Doors', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 51),
+            'unlock' => array('name' => __('Unlock Doors', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 52, 'confirm' => 1),
+            'climate_on' => array('name' => __('Climate On', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 53),
+            'climate_off' => array('name' => __('Climate Off', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 54),
+            'set_temp' => array('name' => __('Set Target Temperature', __FILE__), 'subType' => 'slider', 'visible' => 1, 'order' => 55, 'min' => 16, 'max' => 30),
+            'rapid_cool' => array('name' => __('Rapid Cooling', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 56),
+            'rapid_warm' => array('name' => __('Rapid Warming', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 57),
+            'defrost_on' => array('name' => __('Defrost On', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 58),
+            'defrost_off' => array('name' => __('Defrost Off', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 59),
+            'g_clean_on' => array('name' => __('G-Clean On', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 60),
+            'g_clean_off' => array('name' => __('G-Clean Off', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 61),
+            'seat_heat_driver' => array('name' => __('Driver Seat Heat', __FILE__), 'subType' => 'slider', 'visible' => 0, 'order' => 62, 'min' => 0, 'max' => 3),
+            'seat_vent_driver' => array('name' => __('Driver Seat Vent', __FILE__), 'subType' => 'slider', 'visible' => 0, 'order' => 63, 'min' => 0, 'max' => 3),
+            'find_car' => array('name' => __('Find Car (Lights & Horn)', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 64),
+            'unlock_trunk' => array('name' => __('Unlock Trunk', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 65, 'confirm' => 1),
+            'sunroof_open' => array('name' => __('Open Sunroof', __FILE__), 'subType' => 'other', 'visible' => 0, 'order' => 66),
+            'sunroof_close' => array('name' => __('Close Sunroof', __FILE__), 'subType' => 'other', 'visible' => 0, 'order' => 67),
+            'scheduled_charge_on' => array('name' => __('Scheduled Charge On', __FILE__), 'subType' => 'other', 'visible' => 0, 'order' => 68),
+            'scheduled_charge_off' => array('name' => __('Scheduled Charge Off', __FILE__), 'subType' => 'other', 'visible' => 0, 'order' => 69),
+            // Local Jeedom Security & Guard commands
+            'alarm_arm' => array('name' => __('Arm Vehicle Alarm', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 70),
+            'alarm_disarm' => array('name' => __('Disarm Vehicle Alarm', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 71, 'confirm' => 1),
+            'sentry_on' => array('name' => __('Enable Sentry Mode', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 72),
+            'sentry_off' => array('name' => __('Disable Sentry Mode', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 73),
+            'child_pet_guard_on' => array('name' => __('Enable Child & Pet Guard', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 74),
+            'child_pet_guard_off' => array('name' => __('Disable Child & Pet Guard', __FILE__), 'subType' => 'other', 'visible' => 1, 'order' => 75)
         );
 
         foreach ($actionCommands as $logicalId => $meta) {
@@ -394,7 +472,7 @@ class geelyconnect extends eqLogic {
     }
 
     /**
-     * Create or update a command on this eqLogic without duplicating logic.
+     * Create a command on this eqLogic if it does not yet exist.
      *
      * @param string $logicalId
      * @param string $type
@@ -429,6 +507,117 @@ class geelyconnect extends eqLogic {
     }
 
     /**
+     * Evaluate sensor-based alerts, Jeedom Vehicle Alarm, Sentry Mode, and Child & Pet Cabin Guard.
+     *
+     * @param array<string, mixed> $telemetry
+     * @return void
+     */
+    public function evaluateAlertsAndGuards(array $telemetry) {
+        $alerts = array();
+
+        $tpmsValues = array(
+            (float) ($telemetry['tpms_fl'] ?? 2.5),
+            (float) ($telemetry['tpms_fr'] ?? 2.5),
+            (float) ($telemetry['tpms_rl'] ?? 2.5),
+            (float) ($telemetry['tpms_rr'] ?? 2.5)
+        );
+        $lowTpms = min($tpmsValues) > 0 && min($tpmsValues) < 2.0;
+        $this->checkAndUpdateCmd('tpms_alert', $lowTpms ? 1 : 0);
+        if ($lowTpms) {
+            $alerts[] = __('Low tire pressure detected', __FILE__);
+        }
+
+        $bat12v = (float) ($telemetry['battery_12v'] ?? 12.6);
+        $low12v = $bat12v > 0 && $bat12v < 11.8;
+        $this->checkAndUpdateCmd('low_12v_alert', $low12v ? 1 : 0);
+        if ($low12v) {
+            $alerts[] = sprintf(__('Low 12V battery (%.1fV)', __FILE__), $bat12v);
+        }
+
+        $anyOpen = !empty($telemetry['door_fl']) || !empty($telemetry['door_fr']) ||
+                   !empty($telemetry['door_rl']) || !empty($telemetry['door_rr']) ||
+                   !empty($telemetry['trunk_open']) || !empty($telemetry['hood_open']) ||
+                   !empty($telemetry['sunroof_open']) || !empty($telemetry['windows_open']);
+        $isLocked = !empty($telemetry['lock_status']);
+
+        $openWhileLocked = ($isLocked && $anyOpen);
+        $this->checkAndUpdateCmd('open_while_locked_alert', $openWhileLocked ? 1 : 0);
+        if ($openWhileLocked) {
+            $alerts[] = __('Opening detected while vehicle is locked', __FILE__);
+        }
+
+        // Child & Pet Cabin Guard: monitors cabin temperature and auto-starts AC if unsafe.
+        $guardCmd = $this->getCmd('info', 'child_pet_guard');
+        $guardOn = is_object($guardCmd) && ((int) $guardCmd->execCmd()) === 1;
+        $interiorTemp = (float) ($telemetry['interior_temp'] ?? 22);
+        $unsafeCabin = $guardOn && ($interiorTemp >= 28.0 || $interiorTemp <= 5.0);
+        $this->checkAndUpdateCmd('cabin_overheat_alert', $unsafeCabin ? 1 : 0);
+        if ($unsafeCabin) {
+            $alerts[] = sprintf(__('CRITICAL: Unsafe cabin temperature (%.1f°C)', __FILE__), $interiorTemp);
+            message::add('geelyconnect', sprintf(__('[%s] Child & Pet Cabin Guard ALERT: interior at %.1f°C! Auto-enabling climate.', __FILE__), $this->getName(), $interiorTemp));
+            if (empty($telemetry['climate_status'])) {
+                try {
+                    self::sendToDaemon(array(
+                        'action' => 'command',
+                        'vin' => strtoupper((string) $this->getConfiguration('vin', '')),
+                        'command' => 'climate_on'
+                    ));
+                } catch (Exception $e) {
+                    log::add('geelyconnect', 'error', 'Child/Pet Guard auto-climate failed: ' . $e->getMessage());
+                }
+            }
+        }
+
+        // Jeedom Vehicle Alarm & Sentry Mode: detect unexpected opening or GPS movement while armed.
+        $alarmCmd = $this->getCmd('info', 'alarm_armed');
+        $sentryCmd = $this->getCmd('info', 'sentry_mode');
+        $alarmArmed = is_object($alarmCmd) && ((int) $alarmCmd->execCmd()) === 1;
+        $sentryActive = is_object($sentryCmd) && ((int) $sentryCmd->execCmd()) === 1;
+
+        $gpsMoved = false;
+        $armedLoc = (string) $this->getConfiguration('armed_location', '');
+        $currentLoc = (string) ($telemetry['location'] ?? '');
+        if (($alarmArmed || $sentryActive) && $armedLoc !== '' && $currentLoc !== '' && self::distanceMeters($armedLoc, $currentLoc) > 100.0) {
+            $gpsMoved = true;
+        }
+
+        $intrusion = ($anyOpen || !$isLocked || $gpsMoved);
+        if ($alarmArmed && $intrusion) {
+            $this->checkAndUpdateCmd('alarm_triggered', 1);
+            $alerts[] = __('ALARM TRIGGERED (intrusion or movement)', __FILE__);
+            message::add('geelyconnect', sprintf(__('[%s] VEHICLE ALARM TRIGGERED! Check doors/GPS immediately.', __FILE__), $this->getName()));
+        }
+        if ($sentryActive && $intrusion) {
+            $this->checkAndUpdateCmd('sentry_alert', 1);
+            $alerts[] = __('Sentry Mode alert', __FILE__);
+        }
+
+        $this->checkAndUpdateCmd('alert_message', empty($alerts) ? 'OK' : implode(' | ', $alerts));
+    }
+
+    /**
+     * Compute approximate distance in meters between two "lat,lon" strings.
+     *
+     * @param string $locA
+     * @param string $locB
+     * @return float
+     */
+    public static function distanceMeters($locA, $locB) {
+        if (!preg_match('/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/', $locA, $a) ||
+            !preg_match('/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/', $locB, $b)) {
+            return 0.0;
+        }
+        $lat1 = deg2rad((float) $a[1]);
+        $lon1 = deg2rad((float) $a[2]);
+        $lat2 = deg2rad((float) $b[1]);
+        $lon2 = deg2rad((float) $b[2]);
+        $dLat = $lat2 - $lat1;
+        $dLon = $lon2 - $lon1;
+        $h = sin($dLat / 2) * sin($dLat / 2) + cos($lat1) * cos($lat2) * sin($dLon / 2) * sin($dLon / 2);
+        return 2 * 6371000 * asin(min(1.0, sqrt($h)));
+    }
+
+    /**
      * Validate GPS coordinates ("lat,lon") and return a safe OpenStreetMap URL or empty string.
      *
      * @param string $rawLocation
@@ -448,7 +637,6 @@ class geelyconnect extends eqLogic {
 
     /**
      * Render the custom automotive widget for dashboard and mobile views.
-     * Falls back cleanly to standard Jeedom rendering if disabled by the user.
      *
      * @param string $_version
      * @return string
@@ -482,16 +670,17 @@ class geelyconnect extends eqLogic {
             return ($val === '' || $val === null) ? $default : $val;
         };
 
-        $getCmdId = function ($logicalId) {
-            $cmd = $this->getCmd('action', $logicalId);
-            return is_object($cmd) ? (string) $cmd->getId() : '';
-        };
-
         $soc = max(0, min(100, (int) round((float) $getVal('soc', 0))));
         $range = max(0, (int) round((float) $getVal('range', 0)));
         $odometer = max(0, (int) round((float) $getVal('odometer', 0)));
         $rawVin = (string) $getVal('vin', $this->getConfiguration('vin', '--'));
+        $modelName = trim((string) $this->getConfiguration('model', $getVal('model_info', 'Geely Vehicle')));
+        $year = trim((string) $this->getConfiguration('year', ''));
+        $powertrain = strtoupper(trim((string) $this->getConfiguration('powertrain', 'EV')));
+        $vehicleBadge = trim($modelName . ($year !== '' ? ' ' . $year : '')) . ' • ' . $powertrain;
+
         $rawCharging = (string) $getVal('charging_status', 'idle');
+        $chargingKw = (float) $getVal('charging_power_kw', 0);
         $rawLocation = (string) $getVal('location', '');
         $rawLastUpdate = (string) $getVal('last_update', '--');
 
@@ -499,49 +688,65 @@ class geelyconnect extends eqLogic {
         $isClimateOn = ((int) $getVal('climate_status', 0)) === 1;
         $isCharging = in_array(strtolower(trim($rawCharging)), array('charging', 'fast_charging', 'ac_charging', 'dc_charging', 'active', '1', 'true'), true);
 
-        // Determine SoC color tier: emerald (>50%), amber (20-50%), crimson (<20%).
+        $alarmArmed = ((int) $getVal('alarm_armed', 0)) === 1;
+        $alarmTriggered = ((int) $getVal('alarm_triggered', 0)) === 1;
+        $sentryOn = ((int) $getVal('sentry_mode', 0)) === 1;
+        $guardOn = ((int) $getVal('child_pet_guard', 0)) === 1;
+        $alertSummary = (string) $getVal('alert_message', 'OK');
+
         $socColor = '#ef4444';
-        $socTier = 'critical';
         if ($soc > 50) {
             $socColor = '#10b981';
-            $socTier = 'healthy';
         } elseif ($soc >= 20) {
             $socColor = '#f59e0b';
-            $socTier = 'medium';
         }
 
-        // SVG circle circumference for r=44 is ~276.46.
         $circumference = 276.46;
         $dashOffset = round($circumference * (1 - ($soc / 100)), 2);
-
         $safeMapUrl = self::buildSafeMapUrl($rawLocation);
-        $hasPin = !empty(config::byKey('unlock_pin', 'geelyconnect', '')) ? '1' : '0';
+
+        $openList = array();
+        foreach (array('door_fl' => 'FL', 'door_fr' => 'FR', 'door_rl' => 'RL', 'door_rr' => 'RR', 'trunk_open' => 'Trunk', 'hood_open' => 'Hood', 'windows_open' => 'Win') as $k => $lbl) {
+            if (((int) $getVal($k, 0)) === 1) {
+                $openList[] = $lbl;
+            }
+        }
 
         $replace['#vin#'] = htmlspecialchars($rawVin, ENT_QUOTES, 'UTF-8');
+        $replace['#vehicle_badge#'] = htmlspecialchars($vehicleBadge, ENT_QUOTES, 'UTF-8');
         $replace['#soc#'] = (string) $soc;
         $replace['#soc_color#'] = $socColor;
-        $replace['#soc_tier#'] = $socTier;
         $replace['#soc_dashoffset#'] = (string) $dashOffset;
         $replace['#range#'] = (string) $range;
         $replace['#odometer#'] = number_format($odometer, 0, '.', ' ');
-        $replace['#charging_status#'] = htmlspecialchars(ucwords(str_replace('_', ' ', $rawCharging)), ENT_QUOTES, 'UTF-8');
+        $replace['#charging_status#'] = htmlspecialchars(ucwords(str_replace('_', ' ', $rawCharging)) . ($isCharging && $chargingKw > 0 ? ' (' . $chargingKw . ' kW)' : ''), ENT_QUOTES, 'UTF-8');
         $replace['#charging_active#'] = $isCharging ? 'is-charging' : '';
         $replace['#lock_state_class#'] = $isLocked ? 'is-locked' : 'is-unlocked';
         $replace['#lock_label#'] = $isLocked ? __('Locked', __FILE__) : __('Unlocked', __FILE__);
         $replace['#climate_state_class#'] = $isClimateOn ? 'is-active' : 'is-inactive';
         $replace['#climate_label#'] = $isClimateOn ? __('Active', __FILE__) : __('Off', __FILE__);
         $replace['#climate_next_action#'] = $isClimateOn ? 'climate_off' : 'climate_on';
-        $replace['#location#'] = htmlspecialchars($rawLocation !== '' ? $rawLocation : __('Unavailable', __FILE__), ENT_QUOTES, 'UTF-8');
+        $replace['#interior_temp#'] = (string) round((float) $getVal('interior_temp', 22), 1);
+        $replace['#exterior_temp#'] = (string) round((float) $getVal('exterior_temp', 18), 1);
+        $replace['#target_temp#'] = (string) round((float) $getVal('target_temp', 22), 0);
+        $replace['#battery_12v#'] = number_format((float) $getVal('battery_12v', 12.6), 1);
+        $replace['#tpms_fl#'] = number_format((float) $getVal('tpms_fl', 2.5), 1);
+        $replace['#tpms_fr#'] = number_format((float) $getVal('tpms_fr', 2.5), 1);
+        $replace['#tpms_rl#'] = number_format((float) $getVal('tpms_rl', 2.5), 1);
+        $replace['#tpms_rr#'] = number_format((float) $getVal('tpms_rr', 2.5), 1);
+        $replace['#openings_summary#'] = empty($openList) ? __('All Closed', __FILE__) : htmlspecialchars(implode(', ', $openList), ENT_QUOTES, 'UTF-8');
+        $replace['#alarm_next_action#'] = $alarmArmed ? 'alarm_disarm' : 'alarm_arm';
+        $replace['#alarm_active_class#'] = $alarmTriggered ? 'is-alarm-triggered' : ($alarmArmed ? 'is-guard-on' : '');
+        $replace['#sentry_next_action#'] = $sentryOn ? 'sentry_off' : 'sentry_on';
+        $replace['#sentry_active_class#'] = $sentryOn ? 'is-guard-on' : '';
+        $replace['#guard_next_action#'] = $guardOn ? 'child_pet_guard_off' : 'child_pet_guard_on';
+        $replace['#guard_active_class#'] = $guardOn ? 'is-guard-on' : '';
+        $replace['#alert_message#'] = htmlspecialchars($alertSummary, ENT_QUOTES, 'UTF-8');
+        $replace['#has_alert#'] = ($alertSummary !== '' && $alertSummary !== 'OK') ? '1' : '0';
         $replace['#map_url#'] = htmlspecialchars($safeMapUrl, ENT_QUOTES, 'UTF-8');
         $replace['#has_map#'] = $safeMapUrl !== '' ? '1' : '0';
         $replace['#last_update#'] = htmlspecialchars($rawLastUpdate, ENT_QUOTES, 'UTF-8');
-        $replace['#has_unlock_pin#'] = $hasPin;
-
-        $replace['#cmd_refresh_id#'] = $getCmdId('refresh');
-        $replace['#cmd_lock_id#'] = $getCmdId('lock');
-        $replace['#cmd_unlock_id#'] = $getCmdId('unlock');
-        $replace['#cmd_climate_on_id#'] = $getCmdId('climate_on');
-        $replace['#cmd_climate_off_id#'] = $getCmdId('climate_off');
+        $replace['#has_unlock_pin#'] = !empty(config::byKey('unlock_pin', 'geelyconnect', '')) ? '1' : '0';
 
         $html = template_replace($replace, getTemplate('core', $version, 'geelyconnect', 'geelyconnect'));
         return $this->postToHtml($_version, $html);
@@ -554,7 +759,7 @@ class geelyconnect extends eqLogic {
 class geelyconnectCmd extends cmd {
 
     /**
-     * Execute an action command on the vehicle via the authenticated Python daemon.
+     * Execute an action command (cloud remote control or local Jeedom alarm/sentry/guard).
      *
      * @param array<string, mixed> $_options
      * @return void
@@ -567,37 +772,79 @@ class geelyconnectCmd extends cmd {
 
         /** @var geelyconnect $eqLogic */
         $eqLogic = $this->getEqLogic();
+        $logicalId = $this->getLogicalId();
+
+        // Handle local Jeedom security & guard modes directly without cloud latency.
+        if ($logicalId === 'alarm_arm') {
+            $locCmd = $eqLogic->getCmd('info', 'location');
+            $eqLogic->setConfiguration('armed_location', is_object($locCmd) ? (string) $locCmd->execCmd() : '');
+            $eqLogic->save(true);
+            $eqLogic->checkAndUpdateCmd('alarm_armed', 1);
+            $eqLogic->checkAndUpdateCmd('alarm_triggered', 0);
+            return;
+        }
+        if ($logicalId === 'alarm_disarm') {
+            $eqLogic->checkAndUpdateCmd('alarm_armed', 0);
+            $eqLogic->checkAndUpdateCmd('alarm_triggered', 0);
+            return;
+        }
+        if ($logicalId === 'sentry_on') {
+            $locCmd = $eqLogic->getCmd('info', 'location');
+            $eqLogic->setConfiguration('armed_location', is_object($locCmd) ? (string) $locCmd->execCmd() : '');
+            $eqLogic->save(true);
+            $eqLogic->checkAndUpdateCmd('sentry_mode', 1);
+            $eqLogic->checkAndUpdateCmd('sentry_alert', 0);
+            return;
+        }
+        if ($logicalId === 'sentry_off') {
+            $eqLogic->checkAndUpdateCmd('sentry_mode', 0);
+            $eqLogic->checkAndUpdateCmd('sentry_alert', 0);
+            return;
+        }
+        if ($logicalId === 'child_pet_guard_on') {
+            $eqLogic->checkAndUpdateCmd('child_pet_guard', 1);
+            return;
+        }
+        if ($logicalId === 'child_pet_guard_off') {
+            $eqLogic->checkAndUpdateCmd('child_pet_guard', 0);
+            $eqLogic->checkAndUpdateCmd('cabin_overheat_alert', 0);
+            return;
+        }
+
         $vin = trim((string) $eqLogic->getConfiguration('vin', ''));
         if ($vin === '') {
             throw new Exception(__('Vehicle VIN is not configured on this equipment.', __FILE__));
         }
 
-        $logicalId = $this->getLogicalId();
-        $allowedActions = array('refresh', 'lock', 'unlock', 'climate_on', 'climate_off');
-        if (!in_array($logicalId, $allowedActions, true)) {
+        $allowedCloudActions = array(
+            'refresh', 'lock', 'unlock', 'climate_on', 'climate_off', 'set_temp',
+            'rapid_cool', 'rapid_warm', 'defrost_on', 'defrost_off', 'g_clean_on', 'g_clean_off',
+            'seat_heat_driver', 'seat_vent_driver', 'find_car', 'unlock_trunk',
+            'sunroof_open', 'sunroof_close', 'scheduled_charge_on', 'scheduled_charge_off'
+        );
+        if (!in_array($logicalId, $allowedCloudActions, true)) {
             throw new Exception(__('Unsupported command action.', __FILE__));
         }
 
-        // Enforce optional PIN check for high-risk door unlock commands.
-        if ($logicalId === 'unlock') {
+        if (in_array($logicalId, array('unlock', 'unlock_trunk'), true)) {
             $configuredPin = (string) config::byKey('unlock_pin', 'geelyconnect', '');
             if ($configuredPin !== '') {
-                $providedPin = '';
-                if (isset($_options['pin'])) {
-                    $providedPin = (string) $_options['pin'];
-                } elseif (isset($_options['message'])) {
-                    $providedPin = (string) $_options['message'];
-                }
+                $providedPin = isset($_options['pin']) ? (string) $_options['pin'] : (isset($_options['message']) ? (string) $_options['message'] : '');
                 if ($providedPin === '' || !hash_equals($configuredPin, $providedPin)) {
-                    throw new Exception(__('Door unlock rejected: valid security PIN is required.', __FILE__));
+                    throw new Exception(__('Action rejected: valid security PIN is required.', __FILE__));
                 }
             }
         }
 
-        geelyconnect::sendToDaemon(array(
+        $payload = array(
             'action' => 'command',
             'vin' => strtoupper($vin),
             'command' => $logicalId
-        ));
+        );
+        if (isset($_options['slider'])) {
+            $payload['value'] = $_options['slider'];
+        }
+
+        geelyconnect::sendToDaemon($payload);
     }
 }

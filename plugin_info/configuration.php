@@ -22,9 +22,10 @@ if (!isConnect('admin')) {
     throw new Exception('{{401 - Unauthorized access}}');
 }
 
-// Check server-side whether a password is already stored without ever exposing it to the DOM.
+// Check server-side whether secrets are stored without ever exposing them to the DOM.
 $hasStoredPassword = !empty(config::byKey('password', 'geelyconnect', ''));
 $hasUnlockPin = !empty(config::byKey('unlock_pin', 'geelyconnect', ''));
+$hasMtlsCert = file_exists(geelyconnect::getCertDir() . '/client.crt');
 ?>
 
 <form class="form-horizontal">
@@ -33,10 +34,10 @@ $hasUnlockPin = !empty(config::byKey('unlock_pin', 'geelyconnect', ''));
 
         <div class="form-group">
             <label class="col-md-4 control-label">{{Email / Username}}
-                <sup><i class="fas fa-question-circle tooltips" title="{{Your Geely Connect account email address or username.}}"></i></sup>
+                <sup><i class="fas fa-question-circle tooltips" title="{{Your Geely Connect / Global account email address.}}"></i></sup>
             </label>
             <div class="col-md-6">
-                <input type="text" class="configKey form-control" data-l1key="username" autocomplete="username" placeholder="user@example.com" />
+                <input type="text" class="configKey form-control" id="geelyconnect_username_input" data-l1key="username" autocomplete="username" placeholder="user@example.com" />
             </div>
         </div>
 
@@ -77,6 +78,51 @@ $hasUnlockPin = !empty(config::byKey('unlock_pin', 'geelyconnect', ''));
             </div>
         </div>
 
+        <div class="form-group">
+            <label class="col-md-4 control-label">{{Country Code (ISO-2)}}
+                <sup><i class="fas fa-question-circle tooltips" title="{{2-letter country code used by Geely Global (e.g., ES, GB, DE, IL).}}"></i></sup>
+            </label>
+            <div class="col-md-2">
+                <input type="text" class="configKey form-control" id="geelyconnect_country_input" data-l1key="country_code" maxlength="2" placeholder="ES" style="text-transform:uppercase;" />
+            </div>
+        </div>
+
+        <legend><i class="fas fa-certificate"></i> {{Geely Global OTP &amp; mTLS Device Certificate}}</legend>
+
+        <div class="form-group">
+            <label class="col-md-4 control-label">{{mTLS Certificate Status}}</label>
+            <div class="col-md-6">
+                <?php if ($hasMtlsCert) : ?>
+                    <span class="label label-success"><i class="fas fa-check-circle"></i> {{mTLS Certificate Provisioned}}</span>
+                <?php else : ?>
+                    <span class="label label-default"><i class="fas fa-info-circle"></i> {{Not Provisioned (Optional for EU, Required for Geely Global OTP)}}</span>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="col-md-4 control-label">{{Step 1: Email Verification}}</label>
+            <div class="col-md-6">
+                <button type="button" class="btn btn-info" id="bt_geelyconnect_request_otp">
+                    <i class="fas fa-envelope"></i> {{Send 6-Digit OTP to Email}}
+                </button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="col-md-4 control-label">{{Step 2: Verify OTP &amp; Provision mTLS}}</label>
+            <div class="col-md-4">
+                <div class="input-group">
+                    <input type="text" id="geelyconnect_otp_input" class="form-control" maxlength="6" placeholder="123456" autocomplete="one-time-code" />
+                    <span class="input-group-btn">
+                        <button type="button" class="btn btn-success" id="bt_geelyconnect_verify_otp">
+                            <i class="fas fa-key"></i> {{Verify OTP}}
+                        </button>
+                    </span>
+                </div>
+            </div>
+        </div>
+
         <legend><i class="fas fa-cogs"></i> {{Polling &amp; Daemon Settings}}</legend>
 
         <div class="form-group">
@@ -101,7 +147,7 @@ $hasUnlockPin = !empty(config::byKey('unlock_pin', 'geelyconnect', ''));
 
         <div class="form-group">
             <label class="col-md-4 control-label">{{Optional Unlock PIN}}
-                <sup><i class="fas fa-question-circle tooltips" title="{{Optional confirmation PIN required before executing door unlock commands. Leave blank to keep existing PIN.}}"></i></sup>
+                <sup><i class="fas fa-question-circle tooltips" title="{{Optional confirmation PIN required before executing door/trunk unlock commands. Leave blank to keep existing PIN.}}"></i></sup>
             </label>
             <div class="col-md-6">
                 <div class="input-group">
@@ -123,11 +169,6 @@ $hasUnlockPin = !empty(config::byKey('unlock_pin', 'geelyconnect', ''));
 </form>
 
 <script>
-    /**
-     * Save sensitive credentials (password and optional unlock PIN) through a dedicated
-     * authenticated AJAX endpoint so raw secrets are never stored in .configKey DOM fields
-     * or returned by core config::byKey AJAX responses.
-     */
     function geelyconnect_postSaveConfiguration() {
         var passwordVal = document.getElementById('geelyconnect_password_input').value;
         var pinVal = document.getElementById('geelyconnect_pin_input').value;
@@ -152,11 +193,59 @@ $hasUnlockPin = !empty(config::byKey('unlock_pin', 'geelyconnect', ''));
                     }
                     document.getElementById('geelyconnect_password_input').value = '';
                     document.getElementById('geelyconnect_pin_input').value = '';
-                    $('#div_alert').showAlert({message: '{{Credentials saved securely. Restarting daemon if running.}}', level: 'success'});
+                    $('#div_alert').showAlert({message: '{{Credentials saved securely.}}', level: 'success'});
                 }
             });
         }
     }
+
+    $('#bt_geelyconnect_request_otp').off('click').on('click', function () {
+        $.ajax({
+            type: 'POST',
+            url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
+            data: {
+                action: 'requestOtp',
+                email: $('#geelyconnect_username_input').val(),
+                country_code: $('#geelyconnect_country_input').val()
+            },
+            dataType: 'json',
+            error: function (request, status, error) {
+                handleAjaxError(request, status, error);
+            },
+            success: function (data) {
+                if (data.state !== 'ok') {
+                    $('#div_alert').showAlert({message: data.result, level: 'danger'});
+                    return;
+                }
+                $('#div_alert').showAlert({message: '{{OTP verification email sent. Enter the 6-digit code below.}}', level: 'success'});
+            }
+        });
+    });
+
+    $('#bt_geelyconnect_verify_otp').off('click').on('click', function () {
+        $.ajax({
+            type: 'POST',
+            url: 'plugins/geelyconnect/core/ajax/geelyconnect.ajax.php',
+            data: {
+                action: 'verifyOtp',
+                email: $('#geelyconnect_username_input').val(),
+                country_code: $('#geelyconnect_country_input').val(),
+                otp_code: $('#geelyconnect_otp_input').val()
+            },
+            dataType: 'json',
+            error: function (request, status, error) {
+                handleAjaxError(request, status, error);
+            },
+            success: function (data) {
+                if (data.state !== 'ok') {
+                    $('#div_alert').showAlert({message: data.result, level: 'danger'});
+                    return;
+                }
+                $('#geelyconnect_otp_input').val('');
+                $('#div_alert').showAlert({message: '{{OTP verified and mTLS certificate provisioned!}}', level: 'success'});
+            }
+        });
+    });
 
     $('#bt_geelyconnect_clear_pin').off('click').on('click', function () {
         $.ajax({

@@ -1,10 +1,11 @@
 # Changelog - Geely Connect
 
+## 1.1.0
+- Added Geely Global 2-step Email OTP & mTLS certificate provisioning (`requestOtp` / `verifyOtp`) and ISO-2 country code support.
+- Added capability-driven vehicle identity (`model`, `year`, `trim`, `powertrain` EV/PHEV/ICE) displayed in desktop cards and widget header.
+- Expanded telemetry to 40+ info commands: TPMS (4 tires), 12V battery voltage, interior/exterior temperatures, individual door/trunk/hood/sunroof/window sensors, charging power (kW), plug status, time to full, service due, and PHEV fuel level/range.
+- Added advanced remote controls with asynchronous TCU polling: target temperature slider, Rapid Cooling/Warming, Defrost, G-Clean, driver seat heat/ventilation, Find Car, trunk unlock, sunroof, and scheduled charging.
+- Added sensor-based alerts (`tpms_alert`, `low_12v_alert`, `open_while_locked_alert`, `cabin_overheat_alert`), Jeedom Vehicle Alarm (`alarm_arm` / `alarm_disarm`), Sentry Mode (`sentry_on` / `sentry_off`), and Child & Pet Cabin Guard (`child_pet_guard_on` / `child_pet_guard_off`) with automatic climate protection.
+
 ## 1.0.0
 - Initial production release for Jeedom Core 4.4+.
-- Added isolated Python `venv` daemon (`geelyconnectd`) with `requests` and `pycryptodome` via `packages.json`.
-- Implemented `GeelyApiClient` with regional endpoint support (`EU`, `GLOBAL`, `APAC`), TLS verification, payload signing/encryption, token auto-refresh, and exponential backoff.
-- Hardened credential storage (server-side password masking, `0600` bootstrap handoff, `127.0.0.1` socket with constant-time API key verification, log redaction).
-- Added optional 4–8 digit Unlock PIN and confirmation safeguards for door unlock actions.
-- Designed dark-mode glassmorphism automotive dashboard and mobile widgets (`toHtml()`).
-- Added full English documentation (`docs/en_US/index.md`).
