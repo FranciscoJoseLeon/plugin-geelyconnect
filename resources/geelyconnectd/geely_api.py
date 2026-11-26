@@ -236,6 +236,9 @@ class GeelyApiClient:
         if authenticated and self._access_token:
             headers['Authorization'] = f'Bearer {self._access_token}'
 
+        ca_bundle = os.path.join(self.cert_dir, 'ca.crt') if self.cert_dir else ''
+        tls_verify = ca_bundle if (ca_bundle and os.path.exists(ca_bundle)) else True
+
         try:
             response = self.session.request(
                 method=method,
@@ -244,7 +247,7 @@ class GeelyApiClient:
                 headers=headers,
                 cert=self._mtls_cert,
                 timeout=20,
-                verify=True,
+                verify=tls_verify,
             )
             if response.status_code == 401 and authenticated:
                 logging.info('Access token rejected (401); attempting token refresh.')
@@ -258,7 +261,7 @@ class GeelyApiClient:
                     headers=headers,
                     cert=self._mtls_cert,
                     timeout=20,
-                    verify=True,
+                    verify=tls_verify,
                 )
             response.raise_for_status()
             return response.json()
