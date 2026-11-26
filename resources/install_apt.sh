@@ -13,7 +13,8 @@ echo "********************************************************"
 sudo apt-get update
 echo 25 > "${PROGRESS_FILE}"
 
-sudo apt-get install -y python3-venv python3-pip
+sudo apt-get install -y python3-venv python3-pip ca-certificates
+sudo update-ca-certificates
 echo 50 > "${PROGRESS_FILE}"
 
 BASEDIR=$(cd "$(dirname "$0")" && pwd)
@@ -26,7 +27,7 @@ echo 65 > "${PROGRESS_FILE}"
 "${VENV_DIR}/bin/pip" install --no-cache-dir --upgrade pip
 echo 80 > "${PROGRESS_FILE}"
 
-"${VENV_DIR}/bin/pip" install --no-cache-dir "requests>=2.31.0"
+"${VENV_DIR}/bin/pip" install --no-cache-dir --upgrade certifi "requests>=2.31.0"
 echo 90 > "${PROGRESS_FILE}"
 
 # Install prebuilt wheel if available; never stall compiling C extensions on ARM.

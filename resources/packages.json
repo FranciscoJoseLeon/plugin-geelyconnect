@@ -1,11 +1,15 @@
 {
   "apt": {
     "python3-venv": {},
-    "python3-pip": {}
+    "python3-pip": {},
+    "ca-certificates": {}
   },
   "pip3": {
     "requests": {
       "version": ">=2.31.0"
+    },
+    "certifi": {
+      "version": ">=2024.0.0"
     },
     "pycryptodomex": {
       "version": ">=3.19.0"
